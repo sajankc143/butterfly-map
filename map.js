@@ -1,3 +1,4 @@
+//<![CDATA[
 class ButterflyInfiniteGalleryUpdater {
     constructor(options = {}) {
         this.daysThreshold = options.daysThreshold || 365;
@@ -1166,3 +1167,4 @@ document.addEventListener('DOMContentLoaded', async () => {
    await infiniteGalleryUpdater.init();
    infiniteGalleryUpdater.startAutoRefresh(24);
 });
+//]]>
