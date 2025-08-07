@@ -22,7 +22,7 @@ class ButterflyInfiniteGalleryUpdater {
         this.isLoading = false;
         this.maxRetries = 3;
         this.retryDelay = 1000;
-        this.useProxy = options.useProxy || false;
+       this.useProxy = true; // Force proxy for GitHub Pages
         this.proxyUrl = options.proxyUrl || 'https://api.allorigins.win/raw?url=';
         
         // NEW: Map-related properties
@@ -743,7 +743,7 @@ class ButterflyInfiniteGalleryUpdater {
                                    value="${this.currentSearchParams?.location || ''}">
                         </div>
                         <div class="search-field">
-                            <label for="date-from
+                            
                             <label for="date-from">Date From</label>
                            <input type="date" id="date-from" value="${this.currentSearchParams?.dateFrom || ''}">
                        </div>
