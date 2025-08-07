@@ -2,6 +2,7 @@ let map;
 let observations = [];
 let markers = [];
 let markerGroup;
+let isLoading = false; // Prevent multiple simultaneous loads
 
 // Source URLs to load automatically
 const sourceUrls = [
@@ -220,6 +221,12 @@ function extractObservations(htmlContent, sourceUrl) {
 
 // Load observations from source URLs automatically
 async function loadObservations() {
+    if (isLoading) {
+        console.log('Already loading, skipping duplicate request');
+        return;
+    }
+    
+    isLoading = true;
     console.log('=== LOAD OBSERVATIONS FUNCTION CALLED ===');
     console.log('Function started at:', new Date().toLocaleTimeString());
     
@@ -305,6 +312,8 @@ async function loadObservations() {
     console.log('Calling displayObservations...');
     displayObservations();
     console.log('=== LOAD OBSERVATIONS FUNCTION FINISHED ===\n');
+    
+    isLoading = false;
 }
 
 // Display observations on the map
@@ -425,50 +434,57 @@ function getPageName(url) {
 }
 
 // Initialize the application and AUTO-LOAD data
-document.addEventListener('DOMContentLoaded', () => {
+// Multiple strategies for different hosting environments
+function initializeMap() {
     console.log('=== BUTTERFLY MAP INITIALIZING ===');
-    console.log('DOM Content Loaded event fired');
     
-    initMap();
-    console.log('Map initialized');
-    
-    // IMMEDIATE auto-load - no delay
-    console.log('=== TRIGGERING IMMEDIATE AUTO-LOAD ===');
-    loadObservations();
-    
-    // Also set backup timers in case the immediate one fails
-    setTimeout(() => {
-        console.log('=== BACKUP AUTO-LOAD ATTEMPT (2000ms) ===');
-        if (observations.length === 0) {
-            console.log('No observations loaded yet, trying backup...');
-            loadObservations();
-        }
-    }, 2000);
-});
-
-// ALSO trigger if document is already ready
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    console.log('Document already ready, triggering immediate load');
-    setTimeout(() => {
-        if (typeof map === 'undefined') {
-            initMap();
-        }
-        loadObservations();
-    }, 100);
-}
-
-// FORCE auto-load after a short delay regardless of document state
-setTimeout(() => {
-    console.log('=== FORCED AUTO-LOAD (1000ms) ===');
     if (typeof map === 'undefined') {
-        console.log('Map not initialized, initializing now...');
+        console.log('Initializing map...');
         initMap();
     }
+    
+    console.log('=== TRIGGERING AUTO-LOAD ===');
+    loadObservations();
+}
+
+// Strategy 1: DOMContentLoaded event
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM Content Loaded event fired');
+    initializeMap();
+});
+
+// Strategy 2: If document is already ready (for GitHub Pages)
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    console.log('Document already ready, triggering immediate load');
+    setTimeout(initializeMap, 100);
+}
+
+// Strategy 3: Window load event (fallback for GitHub Pages)
+window.addEventListener('load', () => {
+    console.log('Window load event fired');
     if (observations.length === 0) {
-        console.log('No observations loaded, forcing load...');
-        loadObservations();
+        console.log('No observations loaded yet, trying after window load...');
+        initializeMap();
     }
-}, 1000);
+});
+
+// Strategy 4: Forced load after page settles (GitHub Pages safety net)
+setTimeout(() => {
+    console.log('=== FORCED AUTO-LOAD (2000ms) - GitHub Pages Safety Net ===');
+    if (observations.length === 0) {
+        console.log('Still no observations, forcing load for GitHub Pages...');
+        initializeMap();
+    }
+}, 2000);
+
+// Strategy 5: Additional delayed load for slow GitHub Pages
+setTimeout(() => {
+    console.log('=== DELAYED AUTO-LOAD (5000ms) - Final GitHub Pages Attempt ===');
+    if (observations.length === 0) {
+        console.log('Final attempt for GitHub Pages...');
+        initializeMap();
+    }
+}, 5000);
 
 // Manual refresh function for the button
 function refreshMap() {
