@@ -1,4 +1,1257 @@
-  <script type='text/javascript'>
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+  <meta content="640386500240718" property="fb:app_id">
+  <meta content="width=1000" name="viewport">
+<meta content="Butterflies (Lepidoptera: Papilionoidea) of the World" property="og:title">
+<meta content="website" property="og:type">
+<meta name="description" content="Butterflies (Lepidoptera: Papilionoidea) of the World">
+<meta content="https://blogger.googleusercontent.com/img/b/R29vZ2xl/AVvXsEjAf1jkQPrCuuT8pyCdzgRoyUJ519tG_GHtu0KwR6324ZfSy0ZpnqGpXndZh97xXHQKZ-_DoxXCAQyo-GxCI2iyoFELQweSNOeAKzA1Zx-PgSTGLZw7WTxeZYvyUBMNQVkuwmt2FrQf9yHPBv_iwc3RubIwaoYbcYxXyHOIInt77SpIW94we7wDTHA-NOA/w640-h426/prcallisto.jpg" property="og:image">
+<meta content="https://www.butterflyexplorers.com/p/recently-added.html" property="og:url">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .control-group label {
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .control-group input, .control-group select, .control-group button {
+            padding: 10px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+        }
+
+        .control-group button {
+            background: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .control-group button:hover {
+            background: #45a049;
+        }
+
+        .refresh-btn {
+            background: #2196F3 !important;
+        }
+
+        .refresh-btn:hover {
+            background: #1976D2 !important;
+        }
+
+        #map {
+            height: 600px;
+            width: 100%;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            color: white;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #FFD700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .loading {
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            padding: 20px;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .species-filter {
+            max-width: 300px;
+        }
+
+        .leaflet-popup-content {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .popup-species {
+            font-weight: bold;
+            color: #2c5530;
+            font-style: italic;
+        }
+
+        .popup-common {
+            font-weight: bold;
+            color: #1976D2;
+        }
+
+        .popup-location {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .popup-date {
+            color: #888;
+            font-size: 11px;
+        }
+
+        .popup-image {
+            width: 200px;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 5px;
+            margin: 5px 0;
+        }
+    </style>
+<style>
+   /* Pagination styles */
+    .pagination-btn {
+        padding: 8px 12px;
+        font-size: 14px;
+        background: #3498db;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        margin: 0 2px;
+        transition: all 0.2s ease;
+    }
+    
+    .pagination-btn:hover {
+        background: #2980b9;
+    }
+    
+    .pagination-btn.active {
+    background: rgba(102, 255, 255, 0.15) !important;
+    border: 1px solid rgba(0, 255, 255, 0.3) !important;
+    color: #006064 !important;
+    font-weight: 500 !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3) !important;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.3) !important;
+    backdrop-filter: blur(2px) !important;
+    transition: all 0.3s ease !important;
+}
+    
+    .pagination-btn.disabled {
+        background: #ccc;
+        cursor: not-allowed;
+    }
+    
+    .pagination-ellipsis {
+        margin: 0 5px;
+    }
+  body {
+    background-color: #111111;
+  }
+  body, html {
+  height: 100%;
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+}
+ 
+ 
+  
+p1 {color: blue;}
+img {
+  border-radius: 0%;
+}
+  table, th, td {
+  border: 1px solid none;
+  padding: 5px;
+}
+table {
+  border-spacing: 15px;
+   width: 100%;
+}
+th, td {
+  text-align: center;
+}  
+   td {
+        padding: 7px;
+    border-radius: 9px;
+    transition: -webkit-transform 0.25s ease;
+    transition: transform 0.25s ease;
+}
+     
+.zooma td:hover {
+  border-radius: 10%;
+   -webkit-transform: scale(1.1);
+   transform: scale(1.1);
+          background-color: #808080;
+        }
+#hiddenslider img:hover {
+  opacity: 0.9;
+}
+  td:hover {
+          background-color: #808080;
+        }
+  .hoverno:hover {
+    background-color: #111111 !important;
+ }
+
+   .extra { 
+    display: none;
+}
+
+h2:hover .extra {
+    display: inline-block;
+}
+  h3:hover .extra {
+    display: inline-block;
+}
+   hr {
+        height: 2px;
+        background-color: #33ccff;
+        border: none;
+     width: 100%;
+    }
+  p {
+    font-size: 15px;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  text-align: justify;
+  text-justify: inter-word;
+    color: #C0C0C0;
+}
+  .hr1 {
+    height: 1px;
+        background-color: gray;
+        border: none;
+     width: 100%;
+  }
+  div.insert {
+  display: none;
+}
+
+/* Search form styles */
+/* Search form styles - Glassmorphic iOS 26 style - Slimmer version */
+.search-container {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 24px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    max-width: 100%;
+}
+
+.search-form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+}
+
+.search-field {
+    flex: 1 1 calc(25% - 12px);
+    min-width: 180px;
+}
+
+.search-field label {
+    display: block;
+    margin-bottom: 6px;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    font-weight: 500;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Updated search field styles to fix date input sizing */
+.search-field input, 
+.search-field select {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 14px;
+    transition: all 0.25s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    height: 40px; /* Fixed height */
+    box-sizing: border-box; /* Ensures padding is included in height */
+    line-height: 1; /* Fixes vertical alignment */
+    appearance: none; /* Removes platform-specific styling */
+    -webkit-appearance: none; /* For Safari */
+}
+
+/* Special styling for date inputs */
+.search-field input[type="date"] {
+    position: relative;
+    padding-right: 30px; /* Space for calendar icon */
+}
+
+/* Fake calendar icon for date inputs */
+.search-field input[type="date"]::-webkit-calendar-picker-indicator {
+    position: absolute;
+    right: 8px;
+    color: rgba(255, 255, 255, 0.6);
+    background: none;
+    cursor: pointer;
+}
+
+/* Make sure selects match the same height */
+.search-field select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='rgba(255,255,255,0.6)'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 16px;
+}
+
+.search-field input:focus, 
+.search-field select:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.search-field input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+}
+
+.search-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 8px;
+    flex: 1 1 100%;
+}
+
+.search-actions button {
+    padding: 10px 18px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.25s ease;
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.1);
+    flex: 1;
+}
+
+.search-btn {
+    background: rgba(52, 152, 219, 0.85);
+    color: white;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.search-btn:hover {
+    background: rgba(41, 128, 185, 0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.15);
+}
+
+.reset-btn {
+    background: rgba(231, 76, 60, 0.85);
+    color: white;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.reset-btn:hover {
+    background: rgba(192, 57, 43, 0.9);
+    transform: translateY(-1px);
+    box-shadow: 0 5px 10px rgba(0, 0, 0, 0.15);
+}
+
+.search-results-info {
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 12px;
+    font-size: 13px;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    padding: 0 4px;
+}
+
+.no-results {
+    text-align: center;
+    padding: 30px;
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .search-field {
+        flex: 1 1 calc(50% - 8px);
+    }
+}
+
+@media (max-width: 480px) {
+    .search-field {
+        flex: 1 1 100%;
+    }
+    
+    .search-actions {
+        flex-direction: column;
+        gap: 8px;
+    }
+    
+    .search-actions button {
+        width: 100%;
+    }
+}
+/* Rest of your existing CSS remains exactly the same */
+/* Pagination styles */
+.pagination-btn {
+    padding: 8px 12px;
+    font-size: 14px;
+    background: #3498db;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0 2px;
+    transition: all 0.2s ease;
+}
+
+.pagination-btn:hover {
+    background: #2980b9;
+}
+
+.pagination-btn.active {
+    background: rgba(102, 255, 255, 0.15) !important;
+    border: 1px solid rgba(0, 255, 255, 0.3) !important;
+    color: #006064 !important;
+    font-weight: 500 !important;
+    box-shadow: 0 0 10px rgba(0, 255, 255, 0.3) !important;
+    text-shadow: 0 0 5px rgba(0, 255, 255, 0.3) !important;
+    backdrop-filter: blur(2px) !important;
+    transition: all 0.3s ease !important;
+}
+
+.pagination-btn.disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.pagination-ellipsis {
+    margin: 0 5px;
+}
+
+body {
+    background-color: #111111;
+}
+
+body, html {
+    height: 100%;
+    margin: 0;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+p1 {color: blue;}
+
+img {
+    border-radius: 0%;
+}
+
+table, th, td {
+    border: 1px solid none;
+    padding: 5px;
+}
+
+table {
+    border-spacing: 15px;
+    width: 100%;
+}
+
+th, td {
+    text-align: center;
+}
+
+td {
+    padding: 7px;
+    border-radius: 9px;
+    transition: -webkit-transform 0.25s ease;
+    transition: transform 0.25s ease;
+}
+
+.zooma td:hover {
+    border-radius: 10%;
+    -webkit-transform: scale(1.1);
+    transform: scale(1.1);
+    background-color: #808080;
+}
+
+#hiddenslider img:hover {
+    opacity: 0.9;
+}
+
+td:hover {
+    background-color: #808080;
+}
+
+.hoverno:hover {
+    background-color: #111111 !important;
+}
+
+.extra { 
+    display: none;
+}
+
+h2:hover .extra {
+    display: inline-block;
+}
+
+h3:hover .extra {
+    display: inline-block;
+}
+
+hr {
+    height: 2px;
+    background-color: #33ccff;
+    border: none;
+    width: 100%;
+}
+
+p {
+    font-size: 15px;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    text-align: justify;
+    text-justify: inter-word;
+    color: #C0C0C0;
+}
+
+.hr1 {
+    height: 1px;
+    background-color: gray;
+    border: none;
+    width: 100%;
+}
+
+div.insert {
+    display: none;
+}
+
+@media only screen 
+and (min-device-width: 768px) 
+and (max-device-width: 1024px) 
+and (-webkit-min-device-pixel-ratio: 1) {
+    p {
+        font-size: 15px;
+        text-align: justify;
+        text-justify: inter-word;
+        margin-left: 13px;
+    }
+}
+
+/* iPad 3, 4 and Pro 9.7" */
+@media only screen 
+and (min-device-width: 768px) 
+and (max-device-width: 1024px) 
+and (-webkit-min-device-pixel-ratio: 2) {
+    p {
+        font-size: 15px;
+        text-align: justify;
+        text-justify: inter-word;
+        margin-left: 13px;
+    }
+}
+
+@media only screen and (max-device-width: 480px) {
+    .hoverno2:hover {
+        background: grey !important;
+    }
+    p {
+        font-size: 25px;
+        text-align: justify;
+        text-justify: inter-word;
+        margin-left: 13px;
+    }
+    hr {
+        height: 2px;
+        background-color: #33ccff;
+        border: none;
+        width: 970px;
+    }
+    .hr1 {
+        height: 1px;
+        background-color: gray;
+        border: none;
+        width: 970px;
+    }
+    #myBtn1 { display: none !important; }
+    .icon-bar { display: none !important; }
+    td:hover {
+        background-color: #111111;
+    }
+}
+
+* body {font-family: Verdana, sans-serif;}
+.mySlides {display: none;}
+img {vertical-align: middle;}
+
+/* Slideshow container */
+.slideshow-container {
+    width: 115%;
+    right: 90px;
+    position: relative;
+    margin: auto;
+    box-sizing: border-box;
+}
+
+.slideshow-container > img {
+    display: block;
+}
+
+.slideshow-container::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    box-shadow: 0 0 100px rgba(0,0,0,0.9) inset;
+}
+
+/* Caption text */
+.text {
+    color: black;
+    font-size: 15px;
+    font-weight: bold;
+    background-color: white;
+    opacity: 0.4;
+    padding: 8px 12px;
+    position: absolute;
+    bottom: 8px;
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+/* Number text (1/3 etc) */
+.numbertext {
+    color: #f2f2f2;
+    font-size: 12px;
+    padding: 8px 12px;
+    position: absolute;
+    top: 0;
+}
+
+/* The dots/bullets/indicators */
+.dot {
+    height: 15px;
+    width: 15px;
+    margin: 0 2px;
+    background-color: #bbb;
+    border-radius: 50%;
+    display: inline-block;
+    transition: background-color 0.6s ease;
+}
+
+.active {
+    background-color: #717171;
+}
+
+/* Fading animation */
+.fade {
+    -webkit-animation-name: fade;
+    -webkit-animation-duration: 2s;
+    animation-name: fade;
+    animation-duration: 2s;
+}
+
+@-webkit-keyframes fade {
+    from {opacity: .2} 
+    to {opacity: 1}
+}
+
+@keyframes fade {
+    from {opacity: .2} 
+    to {opacity: 1}
+}
+
+@media (max-width: 1000px) {
+    .text {font-size: 30px;}
+    .slideshow-container {
+        max-width: 1058px;
+        position: relative;
+        margin: auto;
+        box-sizing: border-box;
+    }
+}
+</style>
+</head>
+<body>
+  <ol style = "padding:0;margin:0"> 
+    <button id="myBtn1" onclick="topFunction()" title="Go to top">Top</button>
+<div class='infinite-gallery-section'>
+    <div class='gallery-recently'>
+        <br/>
+        <a class='gallery-button1'>All Recent Species</a> 
+        <br/>
+        <div id='infinite-gallery-container'>
+            <!-- Gallery content will be populated by JavaScript -->
+            <div style="text-align: center; padding: 40px; color: #666;">
+                <p>Loading recent butterfly images...</p>
+            </div>
+        </div>
+        <br/>
+        <br/>
+    </div>
+</div>
+    <div class="container">
+        <h1>🦋 Butterfly Observation Points Map</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Data Source URLs (one per line)</label>
+                <textarea id="sourceUrls" rows="3" style="width: 400px; resize: vertical;">
+https://www.butterflyexplorers.com/p/butterflies-of-arizona.html
+https://www.butterflyexplorers.com/p/butterflies-of-florida.html
+https://www.butterflyexplorers.com/p/butterflies-of-texas.html
+https://www.butterflyexplorers.com/p/butterflies-of-puerto-rico.html
+https://www.butterflyexplorers.com/p/butterflies-of-new-mexico.html
+https://www.butterflyexplorers.com/p/butterflies-of-panama.html</textarea>
+            </div>
+            
+            <div class="control-group">
+                <label>Filter by Species</label>
+                <input type="text" id="speciesFilter" class="species-filter" placeholder="Enter species name...">
+            </div>
+            
+            <div class="control-group">
+                <label>Actions</label>
+                <button onclick="loadObservations()" class="refresh-btn">Load/Refresh Data</button>
+                <button onclick="clearMap()">Clear Map</button>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            Loading butterfly observation data...
+        </div>
+
+        <div id="map"></div>
+
+        <div class="stats" id="stats"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script>
+        let map;
+        let observations = [];
+        let markers = [];
+        let markerGroup;
+
+        // Initialize the map
+        function initMap() {
+            map = L.map('map').setView([39.8283, -98.5795], 4); // Center on US
+
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            markerGroup = L.layerGroup().addTo(map);
+
+            // Add species filter functionality
+            document.getElementById('speciesFilter').addEventListener('input', filterObservations);
+        }
+
+        // Parse coordinates from various formats
+        function parseCoordinates(text) {
+            if (!text) return null;
+
+            console.log('Parsing coordinates from:', text); // Debug log
+
+            // Decode HTML entities first
+            const decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            
+            // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
+            const coordPatterns = [
+                // Standard format: (36°34'41''N 105°26'26''W, 10227 ft.)
+                /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+                // Without parentheses: 36°34'41''N 105°26'26''W
+                /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+                // With spaces in different places
+                /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+                // Decimal degrees in parentheses
+                /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+                // Simple decimal pattern
+                /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
+            ];
+
+            for (let pattern of coordPatterns) {
+                const match = decodedText.match(pattern);
+                if (match) {
+                    console.log('Coordinate match found:', match); // Debug log
+                    
+                    if (match.length >= 8) {
+                        // DMS format
+                        const latDeg = parseInt(match[1]);
+                        const latMin = parseInt(match[2]);
+                        const latSec = parseInt(match[3]);
+                        const latDir = match[4];
+                        
+                        const lonDeg = parseInt(match[5]);
+                        const lonMin = parseInt(match[6]);
+                        const lonSec = parseInt(match[7]);
+                        const lonDir = match[8];
+
+                        let lat = latDeg + latMin/60 + latSec/3600;
+                        let lon = lonDeg + lonMin/60 + lonSec/3600;
+
+                        if (latDir === 'S') lat = -lat;
+                        if (lonDir === 'W') lon = -lon;
+
+                        console.log('Parsed coordinates:', [lat, lon]); // Debug log
+                        return [lat, lon];
+                    } else if (match.length >= 4) {
+                        // Decimal format
+                        let lat = parseFloat(match[1]);
+                        const latDir = match[2];
+                        let lon = parseFloat(match[3]);
+                        const lonDir = match[4];
+
+                        if (latDir === 'S') lat = -lat;
+                        if (lonDir === 'W') lon = -lon;
+
+                        console.log('Parsed decimal coordinates:', [lat, lon]); // Debug log
+                        return [lat, lon];
+                    }
+                }
+            }
+
+            // Try to find any numbers that look like coordinates
+            const numberPattern = /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/;
+            const numberMatch = decodedText.match(numberPattern);
+            if (numberMatch) {
+                const lat = parseFloat(numberMatch[1]);
+                const lon = parseFloat(numberMatch[2]);
+                if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                    console.log('Fallback coordinate parsing:', [lat, lon]); // Debug log
+                    return [lat, lon];
+                }
+            }
+
+            console.log('No coordinates found in:', decodedText); // Debug log
+            return null;
+        }
+
+        // Extract observation data from HTML content
+        function extractObservations(htmlContent, sourceUrl) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlContent, 'text/html');
+            const foundObservations = [];
+
+            // Find all image links with data-title attributes
+            const imageLinks = doc.querySelectorAll('a[data-title]');
+            console.log(`Found ${imageLinks.length} image links with data-title in ${getPageName(sourceUrl)}`);
+
+            imageLinks.forEach((link, index) => {
+                const dataTitle = link.getAttribute('data-title');
+                const img = link.querySelector('img');
+                
+                if (dataTitle && img) {
+                    console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...'); // Debug log
+                    
+                    // Decode HTML entities in data-title
+                    const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+                    
+                    // Parse species and common name - handle both <p4><i> and <i> formats
+                    let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
+                    if (!speciesMatch) {
+                        speciesMatch = decodedTitle.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
+                    }
+                    
+                    let species = 'Unknown Species';
+                    let commonName = 'Unknown';
+
+                    if (speciesMatch) {
+                        species = speciesMatch[1].trim();
+                        commonName = speciesMatch[2].trim();
+                        console.log(`Parsed species: ${species} - ${commonName}`);
+                    } else {
+                        console.log('Could not parse species from title');
+                    }
+
+                    // Parse coordinates
+                    const coordinates = parseCoordinates(decodedTitle);
+                    
+                    if (coordinates) {
+                        console.log(`Found coordinates: ${coordinates}`);
+                        
+                        // Extract location name - everything between <br/> and coordinates
+                        let location = '';
+                        const locationPatterns = [
+                            /<br\/?>\s*([^(]+?)(?:\s+\([0-9])/,  // Location before coordinates
+                            /<br\/?>\s*([^(]+?)$/,               // Location at end
+                            /<br\/?>\s*([^<]+?)\s+\d{4}\/\d{2}\/\d{2}/ // Location before date
+                        ];
+                        
+                        for (let pattern of locationPatterns) {
+                            const locationMatch = decodedTitle.match(pattern);
+                            if (locationMatch) {
+                                location = locationMatch[1].trim();
+                                break;
+                            }
+                        }
+
+                        // Extract date
+                        const dateMatch = decodedTitle.match(/(\d{4}\/\d{2}\/\d{2})/);
+                        let date = '';
+                        if (dateMatch) {
+                            date = dateMatch[1];
+                        }
+
+                        // Extract photographer
+                        const photographerMatch = decodedTitle.match(/©\s*([^&]+(?:&[^&]+)*)/);
+                        let photographer = '';
+                        if (photographerMatch) {
+                            photographer = photographerMatch[1].trim();
+                        }
+
+                        foundObservations.push({
+                            species: species,
+                            commonName: commonName,
+                            coordinates: coordinates,
+                            location: location,
+                            date: date,
+                            photographer: photographer,
+                            imageUrl: img.getAttribute('src'),
+                            fullImageUrl: link.getAttribute('href'),
+                            sourceUrl: sourceUrl,
+                            originalTitle: decodedTitle
+                        });
+                        
+                        console.log(`Added observation: ${species} at ${location}`);
+                    } else {
+                        console.log(`No coordinates found for: ${species} - ${commonName}`);
+                    }
+                }
+            });
+
+            console.log(`Extracted ${foundObservations.length} observations with coordinates from ${getPageName(sourceUrl)}`);
+            return foundObservations;
+        }
+
+        // Load observations from source URLs
+        async function loadObservations() {
+            const loadingDiv = document.getElementById('loading');
+            loadingDiv.style.display = 'block';
+            
+            observations = [];
+            clearMap();
+
+            const sourceUrls = document.getElementById('sourceUrls').value
+                .split('\n')
+                .map(url => url.trim())
+                .filter(url => url.length > 0);
+
+            let totalLoaded = 0;
+            const errors = [];
+
+            for (const url of sourceUrls) {
+                try {
+                    loadingDiv.textContent = `Loading from ${getPageName(url)}...`;
+                    
+                    // Use CORS proxy for cross-origin requests
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                    const response = await fetch(proxyUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    
+                    const htmlContent = await response.text();
+                    const siteObservations = extractObservations(htmlContent, url);
+                    
+                    observations.push(...siteObservations);
+                    totalLoaded += siteObservations.length;
+                    
+                    console.log(`Loaded ${siteObservations.length} observations from ${getPageName(url)}`);
+                    
+                } catch (error) {
+                    console.error(`Error loading ${url}:`, error);
+                    errors.push(`${getPageName(url)}: ${error.message}`);
+                }
+
+                // Add delay to be respectful to servers
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+
+            loadingDiv.style.display = 'none';
+
+            if (errors.length > 0) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error';
+                errorDiv.innerHTML = `<strong>Errors encountered:</strong><br>${errors.join('<br>')}`;
+                document.querySelector('.container').insertBefore(errorDiv, document.getElementById('map'));
+                
+                setTimeout(() => errorDiv.remove(), 10000);
+            }
+
+            console.log(`Total observations loaded: ${observations.length}`);
+            displayObservations();
+        }
+
+        // Display observations on the map
+        function displayObservations() {
+            markerGroup.clearLayers();
+
+            const filteredObs = getCurrentFilteredObservations();
+
+            filteredObs.forEach(obs => {
+                const popupContent = `
+                    <div>
+                        <div class="popup-species">${obs.species}</div>
+                        <div class="popup-common">${obs.commonName}</div>
+                        ${obs.imageUrl ? `<img src="${obs.imageUrl}" class="popup-image" alt="${obs.species}" onerror="this.style.display='none'">` : ''}
+                        <div class="popup-location">📍 ${obs.location}</div>
+                        ${obs.date ? `<div class="popup-date">📅 ${obs.date}</div>` : ''}
+                        ${obs.photographer ? `<div class="popup-date">📷 ${obs.photographer}</div>` : ''}
+                        <div class="popup-date">🔗 ${getPageName(obs.sourceUrl)}</div>
+                    </div>
+                `;
+
+                const marker = L.marker(obs.coordinates)
+                    .bindPopup(popupContent)
+                    .addTo(markerGroup);
+            });
+
+            // Fit map to show all markers
+            if (filteredObs.length > 0) {
+                const group = new L.featureGroup(markerGroup.getLayers());
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+
+            updateStats();
+        }
+
+        // Filter observations based on species filter
+        function filterObservations() {
+            displayObservations();
+        }
+
+        // Get currently filtered observations
+        function getCurrentFilteredObservations() {
+            const speciesFilter = document.getElementById('speciesFilter').value.toLowerCase();
+            
+            if (!speciesFilter) {
+                return observations;
+            }
+
+            return observations.filter(obs => 
+                obs.species.toLowerCase().includes(speciesFilter) ||
+                obs.commonName.toLowerCase().includes(speciesFilter)
+            );
+        }
+
+        // Clear the map
+        function clearMap() {
+            if (markerGroup) {
+                markerGroup.clearLayers();
+            }
+            updateStats();
+        }
+
+        // Update statistics
+        function updateStats() {
+            const filteredObs = getCurrentFilteredObservations();
+            const uniqueSpecies = new Set(filteredObs.map(obs => obs.species)).size;
+            const uniqueLocations = new Set(filteredObs.map(obs => obs.location)).size;
+            const sourceCounts = {};
+
+            observations.forEach(obs => {
+                const pageName = getPageName(obs.sourceUrl);
+                sourceCounts[pageName] = (sourceCounts[pageName] || 0) + 1;
+            });
+
+            const statsHtml = `
+                <div class="stat-card">
+                    <div class="stat-number">${filteredObs.length}</div>
+                    <div class="stat-label">Total Observations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${uniqueSpecies}</div>
+                    <div class="stat-label">Unique Species</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${uniqueLocations}</div>
+                    <div class="stat-label">Unique Locations</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-number">${Object.keys(sourceCounts).length}</div>
+                    <div class="stat-label">Source Pages</div>
+                </div>
+            `;
+
+            document.getElementById('stats').innerHTML = statsHtml;
+        }
+
+        // Get page name from URL
+        function getPageName(url) {
+            const pageNames = {
+                'butterflies-of-texas.html': 'Texas',
+                'butterflies-of-puerto-rico.html': 'Puerto Rico',
+                'butterflies-of-new-mexico.html': 'New Mexico',
+                'butterflies-of-arizona.html': 'Arizona',
+                'butterflies-of-panama.html': 'Panama',
+                'butterflies-of-florida.html': 'Florida',
+                'new-butterflies.html': 'New Butterflies',
+                'dual-checklist.html': 'Dual Checklist'
+            };
+            
+            for (const [key, name] of Object.entries(pageNames)) {
+                if (url.includes(key)) return name;
+            }
+            return 'Unknown';
+        }
+
+        // Test coordinate parsing with your exact examples
+        function testCoordinateParsing() {
+            console.log('=== TESTING COORDINATE PARSING ===');
+            
+            // Your exact examples
+            const testData = [
+                "&lt;p4&gt;&lt;i&gt;Pieris marginalis&lt;/i&gt; - Margined White&lt;/p4&gt;&lt;br/&gt;Taos Ski Valley, Taos Co., New Mexico (36°34'41''N 105°26'26''W, 10227 ft.) 2025/07/07 © Sajan K.C. &amp; Anisha Sapkota",
+                "<p4><i>Wallengrenia drury</i> - Drury's Broken-dash</p4><br/>El Yunque National Forest, Puerto Rico (18°18'35''N 65°47'38''W, 3400 ft.) 2024/02/21 © Sajan K.C. & Anisha Sapkota"
+            ];
+            
+            testData.forEach((test, index) => {
+                console.log(`\nTest ${index + 1}:`);
+                console.log('Input:', test);
+                const coords = parseCoordinates(test);
+                console.log('Parsed coordinates:', coords);
+                if (coords) {
+                    console.log('✅ SUCCESS: Coordinates extracted');
+                } else {
+                    console.log('❌ FAILED: No coordinates found');
+                }
+            });
+            
+            console.log('=== END TEST ===\n');
+        }
+
+        // Add a test button to the page
+        function addTestButton() {
+            const testButton = document.createElement('button');
+            testButton.textContent = 'Test Coordinate Parsing';
+            testButton.onclick = testCoordinateParsing;
+            testButton.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 10px; background: #ff6b6b; color: white; border: none; border-radius: 5px; cursor: pointer;';
+            document.body.appendChild(testButton);
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            addTestButton();
+            
+            // Automatically run the test
+            setTimeout(testCoordinateParsing, 1000);
+        });
+    </script>
+  <script>
+    function readMore(city) {
+    let dots = document.querySelector(`.card[data-city="${city}"] .dots`);
+    let moreText = document.querySelector(`.card[data-city="${city}"] .more`); 
+    let btnText = document.querySelector(`.card[data-city="${city}"] .myBtn`);
+
+    if (dots.style.display === "none") {
+        dots.style.display = "inline";
+        btnText.innerHTML = "&#8595;"; 
+        moreText.style.display = "none";
+    } else {
+        dots.style.display = "none";
+        btnText.innerHTML = "&#8593;"; 
+        moreText.style.display = "inline";
+    }
+}
+  </script>
+  
+  <script>
+//Get the button
+var mybutton = document.getElementById("myBtn1");
+
+// When the user scrolls down 20px from the top of the document, show the button
+window.onscroll = function() {scrollFunction()};
+
+function scrollFunction() {
+  if (document.body.scrollTop > 20 || document.documentElement.scrollTop > 20) {
+    mybutton.style.display = "block";
+  } else {
+    mybutton.style.display = "none";
+  }
+}
+
+// When the user clicks on the button, scroll to the top of the document
+function topFunction() {
+  document.body.scrollTop = 0;
+  document.documentElement.scrollTop = 0;
+}
+</script>
+    <script type='text/javascript'>
 //<![CDATA[
 
 class ButterflyInfiniteGalleryUpdater {
@@ -921,3 +2174,6 @@ function debugInfiniteGallery() {
 
 //]]>
 </script>
+    </ol>
+</body>
+</html><div class="separator" style="clear: both; text-align: center;"><br /></div>
