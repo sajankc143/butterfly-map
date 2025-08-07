@@ -1,7 +1,6 @@
-// Butterfly Map - Fully Synchronized with Gallery
+// Synchronized Butterfly Map
 let butterflyMap;
 let markerCluster;
-let currentObservations = [];
 
 function initMap() {
     butterflyMap = L.map('map').setView([39.8283, -98.5795], 4);
@@ -12,68 +11,58 @@ function initMap() {
     markerCluster = L.markerClusterGroup();
     butterflyMap.addLayer(markerCluster);
     
-    // Connect to gallery search
-    connectGallerySearch();
+    // Connect to gallery updates
+    connectToGallery();
 }
 
-function connectGallerySearch() {
-    const speciesFilter = document.getElementById('speciesFilter');
-    if (speciesFilter) {
-        speciesFilter.addEventListener('input', function() {
-            updateMapWithFilter(this.value);
-        });
-    }
-}
-
-function updateMapWithFilter(filterValue) {
+function connectToGallery() {
     if (!window.infiniteGalleryUpdater) return;
     
-    // Get current filtered results from gallery
-    const filtered = infiniteGalleryUpdater.filteredImages.filter(img => {
-        return img.species.toLowerCase().includes(filterValue.toLowerCase()) || 
-               img.commonName.toLowerCase().includes(filterValue.toLowerCase());
-    });
+    // Store original update function
+    const originalUpdate = infiniteGalleryUpdater.updateInfiniteGalleryContainer;
     
-    // Convert to map observations
-    currentObservations = filtered.map(img => ({
-        species: img.species,
-        commonName: img.commonName,
-        coordinates: parseCoordinates(img.fullTitle),
-        location: img.location,
-        imageUrl: img.thumbnailUrl,
-        sourceUrl: img.sourceUrl
-    }));
-    
-    // Update map markers
-    updateMapMarkers();
+    // Override to update map when gallery updates
+    infiniteGalleryUpdater.updateInfiniteGalleryContainer = function() {
+        updateMapFromGallery();
+        return originalUpdate.apply(this, arguments);
+    };
 }
 
-function updateMapMarkers() {
+function updateMapFromGallery() {
+    if (!window.infiniteGalleryUpdater || !butterflyMap) return;
+    
+    // Clear existing markers
     markerCluster.clearLayers();
     
-    currentObservations.forEach(obs => {
-        if (obs.coordinates) {
+    // Get current filtered images from gallery
+    const filteredImages = infiniteGalleryUpdater.getFilteredImages();
+    
+    // Add markers for each image with coordinates
+    filteredImages.forEach(img => {
+        const coords = parseCoordinates(img.fullTitle);
+        if (coords) {
             const popupContent = `
-                <div class="popup-species">${obs.species}</div>
-                <div class="popup-common">${obs.commonName}</div>
-                <img src="${obs.imageUrl}" class="popup-image">
-                ${obs.location ? `<div>📍 ${obs.location}</div>` : ''}
+                <div class="popup-species">${img.species}</div>
+                <div class="popup-common">${img.commonName}</div>
+                <img src="${img.thumbnailUrl}" class="popup-image">
+                ${img.location ? `<div>📍 ${img.location}</div>` : ''}
             `;
             
-            L.marker(obs.coordinates)
+            L.marker(coords)
                 .bindPopup(popupContent)
                 .addTo(markerCluster);
         }
     });
     
-    if (currentObservations.length > 0) {
+    // Auto-zoom to show all markers if we have any
+    if (markerCluster.getLayers().length > 0) {
         butterflyMap.fitBounds(markerCluster.getBounds());
     }
 }
 
-// Your existing coordinate parsing function
+// Your existing parseCoordinates function
 function parseCoordinates(text) {
-    // ... keep your current implementation ...
+    // ... keep your existing coordinate parsing logic ...
 }
 
 // Initialize when page loads
