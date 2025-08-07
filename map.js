@@ -34,7 +34,7 @@ function parseCoordinates(text) {
     // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
     const coordPatterns = [
     // Flexible with spacing, now supports decimal seconds
-    /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9.]+)''([EW])[^)]*\)/,
+    /\(\s*([0-9]+)°\s*([0-9]+)'\s*([0-9.]+)''\s*([NS])\s*([0-9]+)°\s*([0-9]+)'\s*([0-9.]+)''\s*([EW])[^)]*\)/,
 
     // Standard format with space
     /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9.]+)''([EW])[^)]*\)/,
@@ -64,14 +64,15 @@ function parseCoordinates(text) {
             if (match.length >= 8) {
                 // DMS format
                 const latDeg = parseInt(match[1]);
-                const latMin = parseInt(match[2]);
-                const latSec = parseInt(match[3]);
-                const latDir = match[4];
-                
-                const lonDeg = parseInt(match[5]);
-                const lonMin = parseInt(match[6]);
-                const lonSec = parseInt(match[7]);
-                const lonDir = match[8];
+const latMin = parseInt(match[2]);
+const latSec = parseFloat(match[3]);  // <-- CHANGE parseInt to parseFloat here
+const latDir = match[4];
+
+const lonDeg = parseInt(match[5]);
+const lonMin = parseInt(match[6]);
+const lonSec = parseFloat(match[7]);  // <-- CHANGE parseInt to parseFloat here
+const lonDir = match[8];
+
 
                 let lat = latDeg + latMin/60 + latSec/3600;
                 let lon = lonDeg + lonMin/60 + lonSec/3600;
