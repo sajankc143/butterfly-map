@@ -1,3 +1,6 @@
+
+//<![CDATA[
+
 class ButterflyInfiniteGalleryUpdater {
     constructor(options = {}) {
         this.daysThreshold = options.daysThreshold || 365;
@@ -1128,3 +1131,5 @@ function debugInfiniteGallery() {
         })));
     }
 }
+
+//]]>
