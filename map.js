@@ -434,60 +434,76 @@ function getPageName(url) {
 }
 
 // Initialize the application and AUTO-LOAD data
-// Multiple strategies for different hosting environments
-function initializeMap() {
-    console.log('=== BUTTERFLY MAP INITIALIZING ===');
+// GitHub Pages-specific initialization
+function initializeMapForGitHub() {
+    console.log('=== INITIALIZING FOR GITHUB PAGES ===');
+    
+    // Ensure all required elements exist
+    const mapDiv = document.getElementById('map');
+    const loadingDiv = document.getElementById('loading');
+    
+    if (!mapDiv) {
+        console.log('Map div not found, retrying in 500ms...');
+        setTimeout(initializeMapForGitHub, 500);
+        return;
+    }
+    
+    if (typeof L === 'undefined') {
+        console.log('Leaflet not loaded yet, retrying in 500ms...');
+        setTimeout(initializeMapForGitHub, 500);
+        return;
+    }
     
     if (typeof map === 'undefined') {
         console.log('Initializing map...');
         initMap();
     }
     
-    console.log('=== TRIGGERING AUTO-LOAD ===');
-    loadObservations();
+    if (!isLoading && observations.length === 0) {
+        console.log('=== STARTING AUTO-LOAD FOR GITHUB PAGES ===');
+        loadObservations();
+    }
 }
 
-// Strategy 1: DOMContentLoaded event
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM Content Loaded event fired');
-    initializeMap();
-});
-
-// Strategy 2: If document is already ready (for GitHub Pages)
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    console.log('Document already ready, triggering immediate load');
-    setTimeout(initializeMap, 100);
+// Immediate execution - no event waiting
+console.log('Script executing immediately...');
+if (document.readyState === 'loading') {
+    console.log('Document still loading, setting up event listeners...');
+    document.addEventListener('DOMContentLoaded', initializeMapForGitHub);
+} else {
+    console.log('Document already loaded, initializing immediately...');
+    initializeMapForGitHub();
 }
 
-// Strategy 3: Window load event (fallback for GitHub Pages)
+// Additional fallbacks for GitHub Pages
+setTimeout(initializeMapForGitHub, 1000);
+setTimeout(initializeMapForGitHub, 3000);
+setTimeout(initializeMapForGitHub, 6000);
+
+// Window load event as final backup
 window.addEventListener('load', () => {
-    console.log('Window load event fired');
-    if (observations.length === 0) {
-        console.log('No observations loaded yet, trying after window load...');
-        initializeMap();
-    }
+    console.log('Window fully loaded');
+    setTimeout(initializeMapForGitHub, 500);
 });
-
-// Strategy 4: Forced load after page settles (GitHub Pages safety net)
-setTimeout(() => {
-    console.log('=== FORCED AUTO-LOAD (2000ms) - GitHub Pages Safety Net ===');
-    if (observations.length === 0) {
-        console.log('Still no observations, forcing load for GitHub Pages...');
-        initializeMap();
-    }
-}, 2000);
-
-// Strategy 5: Additional delayed load for slow GitHub Pages
-setTimeout(() => {
-    console.log('=== DELAYED AUTO-LOAD (5000ms) - Final GitHub Pages Attempt ===');
-    if (observations.length === 0) {
-        console.log('Final attempt for GitHub Pages...');
-        initializeMap();
-    }
-}, 5000);
 
 // Manual refresh function for the button
 function refreshMap() {
     console.log('Manual refresh triggered');
     loadObservations();
 }
+
+// Debug function to check environment
+function checkEnvironment() {
+    console.log('=== ENVIRONMENT CHECK ===');
+    console.log('Document ready state:', document.readyState);
+    console.log('Leaflet loaded:', typeof L !== 'undefined');
+    console.log('Map div exists:', !!document.getElementById('map'));
+    console.log('Loading div exists:', !!document.getElementById('loading'));
+    console.log('Map initialized:', typeof map !== 'undefined');
+    console.log('Observations count:', observations.length);
+    console.log('Currently loading:', isLoading);
+    console.log('=== END CHECK ===');
+}
+
+// Auto-run environment check
+setTimeout(checkEnvironment, 2000);
