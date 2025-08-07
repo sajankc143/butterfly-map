@@ -219,7 +219,8 @@ function extractObservations(htmlContent, sourceUrl) {
     return foundObservations;
 }
 
-// Load observations from source URLs automatically
+
+// Robust loading function with multiple proxy fallbacks and retry logic
 async function loadObservations() {
     if (isLoading) {
         console.log('Already loading, skipping duplicate request');
@@ -227,93 +228,186 @@ async function loadObservations() {
     }
     
     isLoading = true;
-    console.log('=== LOAD OBSERVATIONS FUNCTION CALLED ===');
-    console.log('Function started at:', new Date().toLocaleTimeString());
+    console.log('=== ROBUST LOAD OBSERVATIONS STARTED ===');
     
     const loadingDiv = document.getElementById('loading');
     if (loadingDiv) {
         loadingDiv.style.display = 'block';
-        console.log('Loading indicator shown');
-    } else {
-        console.log('WARNING: Loading div not found');
+        loadingDiv.textContent = 'Starting to load butterfly observations...';
     }
     
     observations = [];
     clearMap();
-    console.log('Cleared existing observations and map');
+
+    // Multiple CORS proxy services as fallbacks
+    const proxyServices = [
+        'https://api.allorigins.win/raw?url=',
+        'https://cors-anywhere.herokuapp.com/',
+        'https://api.codetabs.com/v1/proxy?quest=',
+        'https://thingproxy.freeboard.io/fetch/'
+    ];
 
     let totalLoaded = 0;
     const errors = [];
-    
-    console.log(`Starting to load from ${sourceUrls.length} URLs:`, sourceUrls);
+    const maxRetries = 3;
 
+    async function fetchWithFallbacks(url) {
+        for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
+            const proxy = proxyServices[proxyIndex];
+            
+            for (let retry = 0; retry < maxRetries; retry++) {
+                try {
+                    const proxyUrl = proxy + encodeURIComponent(url);
+                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                    
+                    const response = await fetch(proxyUrl, {
+                        signal: controller.signal,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        const content = await response.text();
+                        if (content && content.length > 1000) { // Basic validation
+                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
+                            return content;
+                        } else {
+                            throw new Error('Content too short or empty');
+                        }
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                } catch (error) {
+                    console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
+                    
+                    if (retry < maxRetries - 1) {
+                        // Wait before retrying (exponential backoff)
+                        const delay = Math.pow(2, retry) * 1000;
+                        console.log(`Waiting ${delay}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+        }
+        
+        throw new Error('All proxies and retries failed');
+    }
+
+    // Process each URL with robust fetching
     for (let i = 0; i < sourceUrls.length; i++) {
         const url = sourceUrls[i];
-        console.log(`\n--- Processing URL ${i + 1}/${sourceUrls.length}: ${url} ---`);
+        const pageName = getPageName(url);
+        
+        console.log(`\n--- Processing ${i + 1}/${sourceUrls.length}: ${pageName} ---`);
+        
+        if (loadingDiv) {
+            loadingDiv.textContent = `Loading ${pageName}... (${i + 1}/${sourceUrls.length})`;
+        }
         
         try {
-            if (loadingDiv) {
-                loadingDiv.textContent = `Loading from ${getPageName(url)}... (${i + 1}/${sourceUrls.length})`;
-            }
-            
-            // Use CORS proxy for cross-origin requests
-            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-            console.log('Fetching from proxy:', proxyUrl);
-            
-            const response = await fetch(proxyUrl);
-            console.log('Response status:', response.status, response.statusText);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const htmlContent = await response.text();
-            console.log('HTML content length:', htmlContent.length);
-            
+            const htmlContent = await fetchWithFallbacks(url);
             const siteObservations = extractObservations(htmlContent, url);
             
             observations.push(...siteObservations);
             totalLoaded += siteObservations.length;
             
-            console.log(`✅ Loaded ${siteObservations.length} observations from ${getPageName(url)}`);
-            console.log(`Total so far: ${totalLoaded} observations`);
+            console.log(`✅ ${pageName}: ${siteObservations.length} observations (Total: ${totalLoaded})`);
+            
+            // Update loading status with progress
+            if (loadingDiv) {
+                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} observations found so far...`;
+            }
             
         } catch (error) {
-            console.error(`❌ Error loading ${url}:`, error);
-            errors.push(`${getPageName(url)}: ${error.message}`);
+            console.error(`❌ Failed to load ${pageName}:`, error.message);
+            errors.push(`${pageName}: ${error.message}`);
+            
+            // Continue with other URLs even if one fails
+            if (loadingDiv) {
+                loadingDiv.textContent = `Failed to load ${pageName}, continuing with others...`;
+            }
         }
 
-        // Add delay to be respectful to servers
-        console.log('Waiting 1 second before next request...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Respectful delay between requests
+        if (i < sourceUrls.length - 1) { // Don't delay after the last request
+            await new Promise(resolve => setTimeout(resolve, 1500));
+        }
     }
 
+    // Finish loading
     if (loadingDiv) {
         loadingDiv.style.display = 'none';
-        console.log('Loading indicator hidden');
     }
 
+    // Show results and errors
+    console.log(`\n=== LOADING COMPLETE ===`);
+    console.log(`Successfully loaded: ${totalLoaded} observations`);
+    console.log(`Failed pages: ${errors.length}`);
+
     if (errors.length > 0) {
-        console.log('Errors encountered:', errors);
+        console.log('Errors:', errors);
+        
+        // Show error notification but don't block the UI
         const errorDiv = document.createElement('div');
-        errorDiv.className = 'error';
-        errorDiv.innerHTML = `<strong>Errors encountered:</strong><br>${errors.join('<br>')}`;
-        errorDiv.style.cssText = 'background: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 10px; margin: 10px 0; border-radius: 4px;';
+        errorDiv.style.cssText = `
+            background: #fff3cd; 
+            border: 1px solid #ffeaa7; 
+            color: #856404; 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 4px;
+            position: relative;
+        `;
+        errorDiv.innerHTML = `
+            <strong>Some pages couldn't be loaded:</strong><br>
+            ${errors.join('<br>')}
+            <br><small>Showing ${totalLoaded} observations from ${sourceUrls.length - errors.length} successful pages.</small>
+            <button onclick="this.parentElement.remove()" style="position: absolute; top: 5px; right: 10px; background: none; border: none; font-size: 16px; cursor: pointer;">×</button>
+        `;
+        
         const container = document.querySelector('.container');
         if (container) {
             container.insertBefore(errorDiv, document.getElementById('map'));
         }
         
-        setTimeout(() => errorDiv.remove(), 10000);
+        // Auto-remove after 15 seconds
+        setTimeout(() => {
+            if (errorDiv.parentElement) {
+                errorDiv.remove();
+            }
+        }, 15000);
     }
 
-    console.log(`\n=== LOADING COMPLETE ===`);
-    console.log(`Total observations loaded: ${observations.length}`);
-    console.log('Calling displayObservations...');
     displayObservations();
-    console.log('=== LOAD OBSERVATIONS FUNCTION FINISHED ===\n');
-    
     isLoading = false;
+    
+    // If we got some observations, consider it a success
+    if (totalLoaded > 0) {
+        console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} observations!`);
+    } else {
+        console.log('⚠️ No observations loaded - all sources may be down');
+        
+        // Show retry option
+        if (loadingDiv) {
+            loadingDiv.style.display = 'block';
+            loadingDiv.innerHTML = `
+                <div style="color: #856404;">
+                    No observations could be loaded from any source. 
+                    <button onclick="loadObservations()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                        Try Again
+                    </button>
+                </div>
+            `;
+        }
+    }
 }
 
 // Display observations on the map
