@@ -14,9 +14,11 @@ function initMap() {
     markerGroup = L.layerGroup().addTo(map);
 }
 
-// Parse coordinates from various formats
+// Parse coordinates from various formats - ENHANCED VERSION
 function parseCoordinates(text) {
     if (!text) return null;
+
+    console.log('Parsing coordinates from:', text.substring(0, 100)); // Debug log
 
     // Decode HTML entities first - including degree symbol
     const decodedText = text
@@ -26,20 +28,29 @@ function parseCoordinates(text) {
         .replace(/&quot;/g, '"')
         .replace(/&#176;/g, '°');
     
-    // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
+    // Enhanced coordinate patterns to match your data
     const coordPatterns = [
+        // Most flexible pattern - handles various spacing
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Standard format with space: (36°34'41''N 105°26'26''W, 10227 ft.)
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Without parentheses but with space: 36°34'41''N 105°26'26''W
         /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Without parentheses, no space: 36°34'41''N105°26'26''W
         /([0-9]+)°([0-9]+)'([0-9]+)''([NS])([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // With various spacing and commas
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Decimal degrees in parentheses
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+        // Simple decimal pattern
         /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
     ];
 
     for (let pattern of coordPatterns) {
         const match = decodedText.match(pattern);
         if (match) {
+            console.log('Coordinate match found:', match); // Debug log
+            
             if (match.length >= 8) {
                 // DMS format
                 const latDeg = parseInt(match[1]);
@@ -58,6 +69,7 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
+                console.log('Parsed coordinates:', [lat, lon]); // Debug log
                 return [lat, lon];
             } else if (match.length >= 4) {
                 // Decimal format
@@ -69,11 +81,13 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
+                console.log('Parsed decimal coordinates:', [lat, lon]); // Debug log
                 return [lat, lon];
             }
         }
     }
 
+    console.log('No coordinates found in:', decodedText.substring(0, 100)); // Debug log
     return null;
 }
 
@@ -122,14 +136,26 @@ function updateMapFromGallery(galleryImages) {
         return;
     }
     
+    console.log(`Starting map update with ${galleryImages.length} gallery images`);
+    
     markerGroup.clearLayers();
     mapObservations = [];
 
-    // Filter gallery images that have coordinate data
-    const imagesWithCoords = galleryImages.filter(image => {
-        if (!image.fullTitle) return false;
+    // Process each image to find coordinates
+    galleryImages.forEach((image, index) => {
+        if (!image.fullTitle) {
+            console.log(`Image ${index} has no fullTitle`);
+            return;
+        }
+        
+        console.log(`Processing image ${index}: ${image.species} - checking for coordinates in title`);
+        console.log(`Title preview: ${image.fullTitle.substring(0, 150)}...`);
+        
         const coords = parseCoordinates(image.fullTitle);
+        
         if (coords) {
+            console.log(`✅ Found coordinates for ${image.species}: [${coords[0]}, ${coords[1]}]`);
+            
             // Add coordinate and location info to the observation
             const observation = {
                 ...image,
@@ -139,20 +165,22 @@ function updateMapFromGallery(galleryImages) {
                 photographer: extractPhotographerFromTitle(image.fullTitle)
             };
             mapObservations.push(observation);
-            return true;
+        } else {
+            console.log(`❌ No coordinates found for ${image.species}`);
         }
-        return false;
     });
 
     console.log(`Found ${mapObservations.length} observations with coordinates from ${galleryImages.length} gallery images`);
 
     // Add markers to map
-    mapObservations.forEach(obs => {
+    mapObservations.forEach((obs, index) => {
+        console.log(`Adding marker ${index + 1}: ${obs.species} at [${obs.coordinates[0]}, ${obs.coordinates[1]}]`);
+        
         const popupContent = `
             <div>
-                <div class="popup-species">${obs.species}</div>
+                <div class="popup-species"><strong>${obs.species}</strong></div>
                 <div class="popup-common">${obs.commonName}</div>
-                ${obs.thumbnailUrl ? `<img src="${obs.thumbnailUrl}" class="popup-image" alt="${obs.species}" onerror="this.style.display='none'" style="max-width: 200px; height: auto;">` : ''}
+                ${obs.thumbnailUrl ? `<img src="${obs.thumbnailUrl}" class="popup-image" alt="${obs.species}" onerror="this.style.display='none'" style="max-width: 200px; height: auto; margin: 10px 0;">` : ''}
                 <div class="popup-location">📍 ${obs.location}</div>
                 ${obs.date ? `<div class="popup-date">📅 ${obs.date}</div>` : ''}
                 ${obs.photographer ? `<div class="popup-photographer">📷 ${obs.photographer}</div>` : ''}
@@ -167,8 +195,11 @@ function updateMapFromGallery(galleryImages) {
 
     // Fit map to show all markers
     if (mapObservations.length > 0) {
+        console.log(`Fitting map bounds to show ${mapObservations.length} markers`);
         const group = new L.featureGroup(markerGroup.getLayers());
         map.fitBounds(group.getBounds().pad(0.1));
+    } else {
+        console.log('No markers to display on map');
     }
 
     updateStats();
@@ -209,6 +240,31 @@ function updateStats() {
     }
 }
 
+// Test coordinate parsing function
+function testCoordinateParsing() {
+    console.log('=== TESTING COORDINATE PARSING ===');
+    
+    // Test with your exact examples
+    const testData = [
+        "&lt;p4&gt;&lt;i&gt;Pieris marginalis&lt;/i&gt; - Margined White&lt;/p4&gt;&lt;br/&gt;Taos Ski Valley, Taos Co., New Mexico (36°34'41''N 105°26'26''W, 10227 ft.) 2025/07/07 © Sajan K.C. &amp; Anisha Sapkota",
+        "<p4><i>Wallengrenia drury</i> - Drury's Broken-dash</p4><br/>El Yunque National Forest, Puerto Rico (18°18'35''N 65°47'38''W, 3400 ft.) 2024/02/21 © Sajan K.C. & Anisha Sapkota"
+    ];
+    
+    testData.forEach((test, index) => {
+        console.log(`\nTest ${index + 1}:`);
+        console.log('Input:', test);
+        const coords = parseCoordinates(test);
+        console.log('Parsed coordinates:', coords);
+        if (coords) {
+            console.log('✅ SUCCESS: Coordinates extracted');
+        } else {
+            console.log('❌ FAILED: No coordinates found');
+        }
+    });
+    
+    console.log('=== END TEST ===\n');
+}
+
 // Modified Butterfly Gallery Class with Map Integration
 class ButterflyInfiniteGalleryUpdater {
     constructor(options = {}) {
@@ -234,7 +290,7 @@ class ButterflyInfiniteGalleryUpdater {
         this.isLoading = false;
         this.maxRetries = 3;
         this.retryDelay = 1000;
-        this.useProxy = options.useProxy || false;
+        this.useProxy = options.useProxy || true; // Changed default to true
         this.proxyUrl = options.proxyUrl || 'https://api.allorigins.win/raw?url=';
     }
 
@@ -282,7 +338,9 @@ class ButterflyInfiniteGalleryUpdater {
         const doc = parser.parseFromString(htmlContent, 'text/html');
         const images = [];
 
+        // Enhanced selectors to match your data structure
         const selectors = [
+            'a[data-title]',  // Primary selector for images with data-title
             '.img-container a[data-lightbox]',
             'td a[data-lightbox]',
             'a[data-lightbox]',
@@ -294,7 +352,9 @@ class ButterflyInfiniteGalleryUpdater {
             doc.querySelectorAll(selector).forEach(el => imgContainers.add(el));
         });
         
-        imgContainers.forEach(link => {
+        console.log(`Found ${imgContainers.size} image containers in ${this.getPageName(sourceUrl)}`);
+        
+        imgContainers.forEach((link, index) => {
             const img = link.querySelector('img');
             if (!img) return;
 
@@ -306,8 +366,9 @@ class ButterflyInfiniteGalleryUpdater {
             let commonName = '';
 
             if (title) {
+                // Enhanced species parsing patterns
                 const titlePatterns = [
-                    /<p4><i>(.*?)<\/i>\s*[-–]\s*(.*?)<\/p4>/i,
+                    /<p4><i>(.*?)<\/i>\s*[-–]\s*(.*?)<\/p4>/i,  // Primary pattern for your data
                     /<i>(.*?)<\/i>\s*[-–]\s*([^<]*?)(?:<br|$)/i,
                     /<i>(.*?)<\/i>\s*[-–]\s*([^<]*?)(?:\s*<|$)/i,
                     /<i>(.*?)<\/i>\s*[-–]\s*([A-Za-z\s\-']+?)(?=\s*[A-Z][a-z]+\s+(?:Co\.|County|Wildlife|Park|Reserve|Area|Forest|Beach)|<br|$)/i,
@@ -321,6 +382,7 @@ class ButterflyInfiniteGalleryUpdater {
                     if (match) {
                         species = match[1].trim();
                         commonName = match[2].trim();
+                        // Clean up common name
                         commonName = commonName.replace(/\s+(Wildlife|Management|Area|Park|Reserve|County|Co\.|State|National|Forest|Beach).*$/i, '');
                         commonName = commonName.replace(/\s+\d+.*$/, '');
                         commonName = commonName.replace(/\s+\(.*$/, '');
@@ -342,10 +404,10 @@ class ButterflyInfiniteGalleryUpdater {
             const thumbnailUrl = img.getAttribute('src');
             
             if (fullImageUrl && thumbnailUrl) {
-                images.push({
+                const imageData = {
                     species: species,
                     commonName: commonName,
-                    fullTitle: title.replace(/"/g, '&quot;'),
+                    fullTitle: title,  // Keep original title with HTML entities
                     fullImageUrl: this.resolveUrl(fullImageUrl, sourceUrl),
                     thumbnailUrl: this.resolveUrl(thumbnailUrl, sourceUrl),
                     alt: img.getAttribute('alt') || `${species} - ${commonName}`,
@@ -359,7 +421,15 @@ class ButterflyInfiniteGalleryUpdater {
                     originalAlt: img.getAttribute('alt') || '',
                     extractionMethod: this.getExtractionMethod(title, img.getAttribute('alt'), species, commonName),
                     hasDataTitle: !!link.getAttribute('data-title')
-                });
+                };
+                
+                images.push(imageData);
+                
+                // Debug log for coordinate testing
+                if (title.includes('°')) {
+                    console.log(`Image with coordinates found: ${species} - ${commonName}`);
+                    console.log(`Title contains: ${title.substring(0, 200)}...`);
+                }
             }
         });
 
@@ -462,13 +532,14 @@ class ButterflyInfiniteGalleryUpdater {
         const fetchUrl = this.useProxy ? this.proxyUrl + encodeURIComponent(url) : url;
 
         try {
+            console.log(`Fetching: ${fetchUrl}`);
+            
             const response = await fetch(fetchUrl, {
                 method: 'GET',
                 headers: {
                     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                     'User-Agent': 'Mozilla/5.0 (compatible; ButterflyGalleryBot/1.0)'
-                },
-                mode: 'cors'
+                }
             });
             
             if (!response.ok && retryCount < this.maxRetries) {
@@ -482,27 +553,13 @@ class ButterflyInfiniteGalleryUpdater {
             }
             
             const content = await response.text();
+            console.log(`Successfully fetched content from ${this.getPageName(url)} (${content.length} chars)`);
+            
             this.cache.set(cacheKey, { content: content, timestamp: Date.now() });
             return content;
             
         } catch (error) {
             console.error(`Failed to fetch ${url}:`, error);
-            
-            if (!this.useProxy && retryCount === 0) {
-                console.log(`Trying with proxy for ${url}`);
-                const proxyUrl = this.proxyUrl + encodeURIComponent(url);
-                try {
-                    const response = await fetch(proxyUrl);
-                    if (response.ok) {
-                        const content = await response.text();
-                        this.cache.set(cacheKey, { content: content, timestamp: Date.now() });
-                        return content;
-                    }
-                } catch (proxyError) {
-                    console.error(`Proxy fetch also failed for ${url}:`, proxyError);
-                }
-            }
-            
             return null;
         }
     }
@@ -564,7 +621,11 @@ class ButterflyInfiniteGalleryUpdater {
         
         console.log(`Total unique images loaded: ${this.allImages.length}`);
         
-        // Update map with current gallery images - FIXED: This should work now
+        // Test coordinate parsing
+        console.log('Testing coordinate parsing on loaded images...');
+        testCoordinateParsing();
+        
+        // Update map with current gallery images
         this.updateMapFromCurrentPage();
         
         return this.allImages;
@@ -647,7 +708,7 @@ class ButterflyInfiniteGalleryUpdater {
         return this.filteredImages;
     }
 
-    // FIXED: Method to update map from current page images
+    // Update map from current page images
     updateMapFromCurrentPage() {
         const displayImages = this.filteredImages.length > 0 ? this.filteredImages : this.allImages;
         const startIndex = (this.currentPage - 1) * this.speciesPerPage;
@@ -811,6 +872,9 @@ class ButterflyInfiniteGalleryUpdater {
                     </button>
                     <button onclick="toggleInfiniteSortOrder()" style="padding: 8px 16px; font-size: 14px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
                         Toggle Sort Order
+                    </button>
+                    <button onclick="testCoordinateParsing()" style="padding: 8px 16px; font-size: 14px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px;">
+                        Test Coordinates
                     </button>
                 </div>
                 <div class="pagination-controls" style="margin-bottom: 20px;">
@@ -1043,8 +1107,8 @@ function resetSearch() {
 // Debug function
 function debugInfiniteGallery() {
     if (infiniteGalleryUpdater) {
-        console.log('All images:', infiniteGalleryUpdater.allImages);
-        console.log('Total images:', infiniteGalleryUpdater.allImages.length);
+        console.log('=== GALLERY DEBUG INFO ===');
+        console.log('All images:', infiniteGalleryUpdater.allImages.length);
         console.log('Map observations:', mapObservations.length);
         
         const withCoords = infiniteGalleryUpdater.allImages.filter(img => {
@@ -1052,17 +1116,18 @@ function debugInfiniteGallery() {
         });
         console.log('Images with coordinates:', withCoords.length);
         
-        // Test coordinate parsing on a few sample titles
-        const sampleTitles = infiniteGalleryUpdater.allImages
+        // Show sample titles with coordinates
+        const coordSamples = infiniteGalleryUpdater.allImages
             .filter(img => img.fullTitle && img.fullTitle.includes('°'))
-            .slice(0, 5);
+            .slice(0, 3);
             
-        console.log('Sample coordinate parsing:');
-        sampleTitles.forEach(img => {
-            const coords = parseCoordinates(img.fullTitle);
-            console.log('Title:', img.fullTitle);
-            console.log('Parsed coords:', coords);
-            console.log('---');
+        console.log('\nSample coordinate titles:');
+        coordSamples.forEach((img, i) => {
+            console.log(`${i + 1}. ${img.species}:`);
+            console.log(`   Title: ${img.fullTitle.substring(0, 200)}...`);
+            console.log(`   Coords: ${parseCoordinates(img.fullTitle)}`);
         });
+        
+        console.log('=== END DEBUG ===');
     }
 }
