@@ -1163,6 +1163,10 @@ document.addEventListener('DOMContentLoaded', async () => {
        displayMapObservations();
    });
    
-   await infiniteGalleryUpdater.init();
-   infiniteGalleryUpdater.startAutoRefresh(24);
+  await window.infiniteGalleryUpdater.init();
+        console.log('Gallery and map integration complete!');
+        
+    } catch (error) {
+        console.error('Initialization failed:', error);
+    }
 });
