@@ -1,91 +1,80 @@
-// Enhanced ButterflyDataManager to work with your gallery
-class ButterflyDataManager {
-  constructor() {
-    this.allObservations = [];
-    this.filteredObservations = [];
-    this.map = null;
-    this.markerCluster = null;
-  }
+// Butterfly Map - Fully Synchronized with Gallery
+let butterflyMap;
+let markerCluster;
+let currentObservations = [];
 
-  initMap() {
-    this.map = L.map('map').setView([39.8283, -98.5795], 4);
+function initMap() {
+    butterflyMap = L.map('map').setView([39.8283, -98.5795], 4);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(this.map);
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(butterflyMap);
     
-    this.markerCluster = L.markerClusterGroup();
-    this.map.addLayer(this.markerCluster);
-  }
-
-  // Modified to use gallery's data instead of fetching separately
-  syncWithGallery(galleryUpdater) {
-    this.allObservations = galleryUpdater.allImages.map(img => this.imageToObservation(img));
-    this.filteredObservations = [...this.allObservations];
-    this.updateMap();
-  }
-
-  imageToObservation(image) {
-    return {
-      species: image.species,
-      commonName: image.commonName,
-      coordinates: this.parseCoordinates(image.fullTitle),
-      location: image.location,
-      date: image.date,
-      imageUrl: image.thumbnailUrl,
-      fullImageUrl: image.fullImageUrl,
-      sourceUrl: image.sourceUrl,
-      originalTitle: image.fullTitle
-    };
-  }
-
-  updateMap() {
-    this.markerCluster.clearLayers();
+    markerCluster = L.markerClusterGroup();
+    butterflyMap.addLayer(markerCluster);
     
-    this.filteredObservations.forEach(obs => {
-      if (obs.coordinates) {
-        const popup = L.popup().setContent(`
-          <div class="popup-species">${obs.species}</div>
-          <div class="popup-common">${obs.commonName}</div>
-          <img src="${obs.imageUrl}" class="popup-image">
-          <div>${obs.location || ''}</div>
-        `);
-        
-        L.marker(obs.coordinates)
-          .bindPopup(popup)
-          .addTo(this.markerCluster);
-      }
-    });
-    
-    if (this.filteredObservations.length > 0) {
-      this.map.fitBounds(this.markerCluster.getBounds());
-    }
-  }
-
-  // Your existing coordinate parsing logic
-  parseCoordinates(text) {
-    // ... keep your current implementation ...
-  }
+    // Connect to gallery search
+    connectGallerySearch();
 }
 
-// Initialize and connect with gallery
-document.addEventListener('DOMContentLoaded', async () => {
-  const butterflyManager = new ButterflyDataManager();
-  butterflyManager.initMap();
-  
-  // Wait for gallery to initialize
-  setTimeout(() => {
-    if (window.infiniteGalleryUpdater) {
-      // Sync with gallery data
-      butterflyManager.syncWithGallery(window.infiniteGalleryUpdater);
-      
-      // Update map whenever gallery filters change
-      const originalUpdate = window.infiniteGalleryUpdater.updateInfiniteGalleryContainer;
-      window.infiniteGalleryUpdater.updateInfiniteGalleryContainer = function() {
-        butterflyManager.filteredObservations = 
-          this.filteredImages.map(img => butterflyManager.imageToObservation(img));
-        butterflyManager.updateMap();
-        return originalUpdate.apply(this, arguments);
-      };
+function connectGallerySearch() {
+    const speciesFilter = document.getElementById('speciesFilter');
+    if (speciesFilter) {
+        speciesFilter.addEventListener('input', function() {
+            updateMapWithFilter(this.value);
+        });
     }
-  }, 500);
-});
+}
+
+function updateMapWithFilter(filterValue) {
+    if (!window.infiniteGalleryUpdater) return;
+    
+    // Get current filtered results from gallery
+    const filtered = infiniteGalleryUpdater.filteredImages.filter(img => {
+        return img.species.toLowerCase().includes(filterValue.toLowerCase()) || 
+               img.commonName.toLowerCase().includes(filterValue.toLowerCase());
+    });
+    
+    // Convert to map observations
+    currentObservations = filtered.map(img => ({
+        species: img.species,
+        commonName: img.commonName,
+        coordinates: parseCoordinates(img.fullTitle),
+        location: img.location,
+        imageUrl: img.thumbnailUrl,
+        sourceUrl: img.sourceUrl
+    }));
+    
+    // Update map markers
+    updateMapMarkers();
+}
+
+function updateMapMarkers() {
+    markerCluster.clearLayers();
+    
+    currentObservations.forEach(obs => {
+        if (obs.coordinates) {
+            const popupContent = `
+                <div class="popup-species">${obs.species}</div>
+                <div class="popup-common">${obs.commonName}</div>
+                <img src="${obs.imageUrl}" class="popup-image">
+                ${obs.location ? `<div>📍 ${obs.location}</div>` : ''}
+            `;
+            
+            L.marker(obs.coordinates)
+                .bindPopup(popupContent)
+                .addTo(markerCluster);
+        }
+    });
+    
+    if (currentObservations.length > 0) {
+        butterflyMap.fitBounds(markerCluster.getBounds());
+    }
+}
+
+// Your existing coordinate parsing function
+function parseCoordinates(text) {
+    // ... keep your current implementation ...
+}
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', initMap);
