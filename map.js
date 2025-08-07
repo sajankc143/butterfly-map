@@ -117,14 +117,25 @@
 
         // Update map with observations from current gallery images
         function updateMapFromGallery(galleryImages) {
+            console.log(`updateMapFromGallery called with ${galleryImages.length} images`);
+            
             markerGroup.clearLayers();
             mapObservations = [];
 
             // Filter gallery images that have coordinate data
-            const imagesWithCoords = galleryImages.filter(image => {
-                if (!image.fullTitle) return false;
+            galleryImages.forEach((image, index) => {
+                if (!image.fullTitle) {
+                    console.log(`Image ${index} has no fullTitle`);
+                    return;
+                }
+                
+                console.log(`Processing image ${index}: ${image.species} - ${image.commonName}`);
+                console.log(`Title: ${image.fullTitle.substring(0, 100)}...`);
+                
                 const coords = parseCoordinates(image.fullTitle);
                 if (coords) {
+                    console.log(`Found coordinates for ${image.species}: ${coords}`);
+                    
                     // Add coordinate and location info to the observation
                     const observation = {
                         ...image,
@@ -134,9 +145,9 @@
                         photographer: extractPhotographerFromTitle(image.fullTitle)
                     };
                     mapObservations.push(observation);
-                    return true;
+                } else {
+                    console.log(`No coordinates found for ${image.species}`);
                 }
-                return false;
             });
 
             console.log(`Found ${mapObservations.length} observations with coordinates from ${galleryImages.length} gallery images`);
@@ -155,6 +166,7 @@
                     </div>
                 `;
 
+                console.log(`Adding marker for ${obs.species} at ${obs.coordinates}`);
                 const marker = L.marker(obs.coordinates)
                     .bindPopup(popupContent)
                     .addTo(markerGroup);
@@ -162,8 +174,11 @@
 
             // Fit map to show all markers
             if (mapObservations.length > 0) {
+                console.log(`Fitting map bounds for ${mapObservations.length} markers`);
                 const group = new L.featureGroup(markerGroup.getLayers());
                 map.fitBounds(group.getBounds().pad(0.1));
+            } else {
+                console.log('No markers to display on map');
             }
 
             updateStats();
@@ -972,6 +987,9 @@
             // Initialize map first
             initMap();
             
+            // Add debug button
+            addDebugButton();
+            
             // Initialize gallery with map integration
             infiniteGalleryUpdater = new ButterflyInfiniteGalleryUpdater({
                 daysThreshold: 365,
@@ -1033,13 +1051,49 @@
         // Debug function
         function debugInfiniteGallery() {
             if (infiniteGalleryUpdater) {
-                console.log('All images:', infiniteGalleryUpdater.allImages);
-                console.log('Total images:', infiniteGalleryUpdater.allImages.length);
+                console.log('=== GALLERY DEBUG INFO ===');
+                console.log('All images:', infiniteGalleryUpdater.allImages.length);
+                console.log('Filtered images:', infiniteGalleryUpdater.filteredImages.length);
+                console.log('Current page:', infiniteGalleryUpdater.currentPage);
                 console.log('Map observations:', mapObservations.length);
                 
-                const withCoords = infiniteGalleryUpdater.allImages.filter(img => {
-                    return parseCoordinates(img.fullTitle) !== null;
+                // Check current page images
+                const displayImages = infiniteGalleryUpdater.filteredImages.length > 0 ? 
+                    infiniteGalleryUpdater.filteredImages : infiniteGalleryUpdater.allImages;
+                const startIndex = (infiniteGalleryUpdater.currentPage - 1) * infiniteGalleryUpdater.speciesPerPage;
+                const endIndex = Math.min(startIndex + infiniteGalleryUpdater.speciesPerPage, displayImages.length);
+                const currentImages = displayImages.slice(startIndex, endIndex);
+                
+                console.log('Current page images:', currentImages.length);
+                
+                // Check how many have coordinates
+                let withCoordsCount = 0;
+                currentImages.forEach((img, i) => {
+                    if (img.fullTitle) {
+                        const coords = parseCoordinates(img.fullTitle);
+                        if (coords) {
+                            withCoordsCount++;
+                            if (i < 3) { // Show first 3
+                                console.log(`Image ${i}: ${img.species} has coords ${coords}`);
+                            }
+                        } else if (i < 3) {
+                            console.log(`Image ${i}: ${img.species} NO coords - title: ${img.fullTitle.substring(0, 100)}`);
+                        }
+                    } else if (i < 3) {
+                        console.log(`Image ${i}: ${img.species} NO fullTitle`);
+                    }
                 });
-                console.log('Images with coordinates:', withCoords.length);
+                
+                console.log(`Images with coordinates: ${withCoordsCount}/${currentImages.length}`);
+                console.log('=== END DEBUG ===');
             }
+        }
+
+        // Add debug button
+        function addDebugButton() {
+            const debugButton = document.createElement('button');
+            debugButton.textContent = 'Debug Gallery & Map';
+            debugButton.onclick = debugInfiniteGallery;
+            debugButton.style.cssText = 'position: fixed; top: 10px; right: 10px; z-index: 1000; padding: 10px; background: #ff6b6b; color: white; border: none; border-radius: 5px; cursor: pointer;';
+            document.body.appendChild(debugButton);
         }
