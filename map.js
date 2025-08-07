@@ -1,4 +1,4 @@
-<script>
+
         let map;
         let observations = [];
         let markers = [];
@@ -410,4 +410,3 @@
             // Automatically run the test
             setTimeout(testCoordinateParsing, 1000);
         });
-    </script>
