@@ -220,58 +220,91 @@ function extractObservations(htmlContent, sourceUrl) {
 
 // Load observations from source URLs automatically
 async function loadObservations() {
+    console.log('=== LOAD OBSERVATIONS FUNCTION CALLED ===');
+    console.log('Function started at:', new Date().toLocaleTimeString());
+    
     const loadingDiv = document.getElementById('loading');
-    loadingDiv.style.display = 'block';
+    if (loadingDiv) {
+        loadingDiv.style.display = 'block';
+        console.log('Loading indicator shown');
+    } else {
+        console.log('WARNING: Loading div not found');
+    }
     
     observations = [];
     clearMap();
+    console.log('Cleared existing observations and map');
 
     let totalLoaded = 0;
     const errors = [];
+    
+    console.log(`Starting to load from ${sourceUrls.length} URLs:`, sourceUrls);
 
-    for (const url of sourceUrls) {
+    for (let i = 0; i < sourceUrls.length; i++) {
+        const url = sourceUrls[i];
+        console.log(`\n--- Processing URL ${i + 1}/${sourceUrls.length}: ${url} ---`);
+        
         try {
-            loadingDiv.textContent = `Loading from ${getPageName(url)}...`;
+            if (loadingDiv) {
+                loadingDiv.textContent = `Loading from ${getPageName(url)}... (${i + 1}/${sourceUrls.length})`;
+            }
             
             // Use CORS proxy for cross-origin requests
             const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            console.log('Fetching from proxy:', proxyUrl);
+            
             const response = await fetch(proxyUrl);
+            console.log('Response status:', response.status, response.statusText);
             
             if (!response.ok) {
                 throw new Error(`HTTP ${response.status}`);
             }
             
             const htmlContent = await response.text();
+            console.log('HTML content length:', htmlContent.length);
+            
             const siteObservations = extractObservations(htmlContent, url);
             
             observations.push(...siteObservations);
             totalLoaded += siteObservations.length;
             
-            console.log(`Loaded ${siteObservations.length} observations from ${getPageName(url)}`);
+            console.log(`✅ Loaded ${siteObservations.length} observations from ${getPageName(url)}`);
+            console.log(`Total so far: ${totalLoaded} observations`);
             
         } catch (error) {
-            console.error(`Error loading ${url}:`, error);
+            console.error(`❌ Error loading ${url}:`, error);
             errors.push(`${getPageName(url)}: ${error.message}`);
         }
 
         // Add delay to be respectful to servers
+        console.log('Waiting 1 second before next request...');
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    loadingDiv.style.display = 'none';
+    if (loadingDiv) {
+        loadingDiv.style.display = 'none';
+        console.log('Loading indicator hidden');
+    }
 
     if (errors.length > 0) {
+        console.log('Errors encountered:', errors);
         const errorDiv = document.createElement('div');
         errorDiv.className = 'error';
         errorDiv.innerHTML = `<strong>Errors encountered:</strong><br>${errors.join('<br>')}`;
         errorDiv.style.cssText = 'background: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 10px; margin: 10px 0; border-radius: 4px;';
-        document.querySelector('.container').insertBefore(errorDiv, document.getElementById('map'));
+        const container = document.querySelector('.container');
+        if (container) {
+            container.insertBefore(errorDiv, document.getElementById('map'));
+        }
         
         setTimeout(() => errorDiv.remove(), 10000);
     }
 
+    console.log(`\n=== LOADING COMPLETE ===`);
     console.log(`Total observations loaded: ${observations.length}`);
+    console.log('Calling displayObservations...');
     displayObservations();
+    console.log('=== LOAD OBSERVATIONS FUNCTION FINISHED ===\n');
 }
 
 // Display observations on the map
@@ -393,17 +426,57 @@ function getPageName(url) {
 
 // Initialize the application and AUTO-LOAD data
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Initializing butterfly map with auto-loading...');
-    initMap();
+    console.log('=== BUTTERFLY MAP INITIALIZING ===');
+    console.log('DOM Content Loaded event fired');
     
-    // Automatically load observations on page load
+    initMap();
+    console.log('Map initialized');
+    
+    // Multiple attempts to auto-load
+    console.log('Setting up auto-load timers...');
+    
     setTimeout(() => {
-        console.log('Auto-loading observations...');
+        console.log('=== AUTO-LOAD ATTEMPT 1 (500ms) ===');
         loadObservations();
-    }, 1000);
+    }, 500);
+    
+    setTimeout(() => {
+        console.log('=== AUTO-LOAD ATTEMPT 2 (2000ms) ===');
+        if (observations.length === 0) {
+            console.log('No observations loaded yet, trying again...');
+            loadObservations();
+        } else {
+            console.log('Observations already loaded, skipping');
+        }
+    }, 2000);
+    
+    setTimeout(() => {
+        console.log('=== AUTO-LOAD ATTEMPT 3 (5000ms) ===');
+        if (observations.length === 0) {
+            console.log('Still no observations, final attempt...');
+            loadObservations();
+        } else {
+            console.log('Observations already loaded, skipping final attempt');
+        }
+    }, 5000);
 });
+
+// Check if we can trigger immediately
+if (document.readyState === 'loading') {
+    console.log('Document still loading, waiting for DOMContentLoaded');
+} else {
+    console.log('Document already loaded, triggering immediately');
+    setTimeout(() => {
+        console.log('=== IMMEDIATE AUTO-LOAD ===');
+        if (typeof initMap === 'function') {
+            initMap();
+            loadObservations();
+        }
+    }, 100);
+}
 
 // Manual refresh function for the button
 function refreshMap() {
+    console.log('Manual refresh triggered');
     loadObservations();
 }
