@@ -19,84 +19,90 @@
         }
 
         // Parse coordinates from various formats
-        function parseCoordinates(text) {
-            if (!text) return null;
+       // Parse coordinates from various formats
+function parseCoordinates(text) {
+    if (!text) return null;
 
-            console.log('Parsing coordinates from:', text); // Debug log
+    console.log('Parsing coordinates from:', text); // Debug log
 
-            // Decode HTML entities first
-            const decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+    // Decode HTML entities first - including degree symbol
+    const decodedText = text
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#176;/g, '°');  // Add this line to decode degree symbols
+    
+    // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
+    const coordPatterns = [
+        // Standard format: (36°34'41''N 105°26'26''W, 10227 ft.)
+        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Without parentheses: 36°34'41''N 105°26'26''W
+        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // With spaces in different places
+        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Decimal degrees in parentheses
+        /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+        // Simple decimal pattern
+        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
+    ];
+
+    for (let pattern of coordPatterns) {
+        const match = decodedText.match(pattern);
+        if (match) {
+            console.log('Coordinate match found:', match); // Debug log
             
-            // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
-            const coordPatterns = [
-                // Standard format: (36°34'41''N 105°26'26''W, 10227 ft.)
-                /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
-                // Without parentheses: 36°34'41''N 105°26'26''W
-                /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-                // With spaces in different places
-                /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-                // Decimal degrees in parentheses
-                /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
-                // Simple decimal pattern
-                /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
-            ];
+            if (match.length >= 8) {
+                // DMS format
+                const latDeg = parseInt(match[1]);
+                const latMin = parseInt(match[2]);
+                const latSec = parseInt(match[3]);
+                const latDir = match[4];
+                
+                const lonDeg = parseInt(match[5]);
+                const lonMin = parseInt(match[6]);
+                const lonSec = parseInt(match[7]);
+                const lonDir = match[8];
 
-            for (let pattern of coordPatterns) {
-                const match = decodedText.match(pattern);
-                if (match) {
-                    console.log('Coordinate match found:', match); // Debug log
-                    
-                    if (match.length >= 8) {
-                        // DMS format
-                        const latDeg = parseInt(match[1]);
-                        const latMin = parseInt(match[2]);
-                        const latSec = parseInt(match[3]);
-                        const latDir = match[4];
-                        
-                        const lonDeg = parseInt(match[5]);
-                        const lonMin = parseInt(match[6]);
-                        const lonSec = parseInt(match[7]);
-                        const lonDir = match[8];
+                let lat = latDeg + latMin/60 + latSec/3600;
+                let lon = lonDeg + lonMin/60 + lonSec/3600;
 
-                        let lat = latDeg + latMin/60 + latSec/3600;
-                        let lon = lonDeg + lonMin/60 + lonSec/3600;
+                if (latDir === 'S') lat = -lat;
+                if (lonDir === 'W') lon = -lon;
 
-                        if (latDir === 'S') lat = -lat;
-                        if (lonDir === 'W') lon = -lon;
+                console.log('Parsed coordinates:', [lat, lon]); // Debug log
+                return [lat, lon];
+            } else if (match.length >= 4) {
+                // Decimal format
+                let lat = parseFloat(match[1]);
+                const latDir = match[2];
+                let lon = parseFloat(match[3]);
+                const lonDir = match[4];
 
-                        console.log('Parsed coordinates:', [lat, lon]); // Debug log
-                        return [lat, lon];
-                    } else if (match.length >= 4) {
-                        // Decimal format
-                        let lat = parseFloat(match[1]);
-                        const latDir = match[2];
-                        let lon = parseFloat(match[3]);
-                        const lonDir = match[4];
+                if (latDir === 'S') lat = -lat;
+                if (lonDir === 'W') lon = -lon;
 
-                        if (latDir === 'S') lat = -lat;
-                        if (lonDir === 'W') lon = -lon;
-
-                        console.log('Parsed decimal coordinates:', [lat, lon]); // Debug log
-                        return [lat, lon];
-                    }
-                }
+                console.log('Parsed decimal coordinates:', [lat, lon]); // Debug log
+                return [lat, lon];
             }
-
-            // Try to find any numbers that look like coordinates
-            const numberPattern = /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/;
-            const numberMatch = decodedText.match(numberPattern);
-            if (numberMatch) {
-                const lat = parseFloat(numberMatch[1]);
-                const lon = parseFloat(numberMatch[2]);
-                if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-                    console.log('Fallback coordinate parsing:', [lat, lon]); // Debug log
-                    return [lat, lon];
-                }
-            }
-
-            console.log('No coordinates found in:', decodedText); // Debug log
-            return null;
         }
+    }
+
+    // Try to find any numbers that look like coordinates
+    const numberPattern = /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/;
+    const numberMatch = decodedText.match(numberPattern);
+    if (numberMatch) {
+        const lat = parseFloat(numberMatch[1]);
+        const lon = parseFloat(numberMatch[2]);
+        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+            console.log('Fallback coordinate parsing:', [lat, lon]); // Debug log
+            return [lat, lon];
+        }
+    }
+
+    console.log('No coordinates found in:', decodedText); // Debug log
+    return null;
+}
 
         // Extract observation data from HTML content
         function extractObservations(htmlContent, sourceUrl) {
