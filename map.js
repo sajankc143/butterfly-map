@@ -22,7 +22,7 @@ class ButterflyInfiniteGalleryUpdater {
         this.isLoading = false;
         this.maxRetries = 3;
         this.retryDelay = 1000;
-       this.useProxy = options.useProxy || false;
+        this.useProxy = options.useProxy || false;
         this.proxyUrl = options.proxyUrl || 'https://api.allorigins.win/raw?url=';
         
         // NEW: Map-related properties
@@ -742,10 +742,11 @@ class ButterflyInfiniteGalleryUpdater {
                             <input type="text" id="location-search" placeholder="Search by location (e.g., Florida)" 
                                    value="${this.currentSearchParams?.location || ''}">
                         </div>
-                       <div class="search-field">
-    <label for="date-from">Date From</label>
-    <input type="date" id="date-from" value="${this.currentSearchParams?.dateFrom || ''}">
-</div>
+                        <div class="search-field">
+                            <label for="date-from
+                            <label for="date-from">Date From</label>
+                           <input type="date" id="date-from" value="${this.currentSearchParams?.dateFrom || ''}">
+                       </div>
                        <div class="search-field">
                            <label for="date-to">Date To</label>
                            <input type="date" id="date-to" value="${this.currentSearchParams?.dateTo || ''}">
