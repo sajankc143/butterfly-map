@@ -1,3 +1,5 @@
+//<![CDATA[
+
 class ButterflyInfiniteGalleryUpdater {
     constructor(options = {}) {
         this.daysThreshold = options.daysThreshold || 365;
@@ -29,6 +31,7 @@ class ButterflyInfiniteGalleryUpdater {
         this.map = null;
         this.markerGroup = null;
         this.mapInitialized = false;
+        this.mapVisible = true; // Track map visibility state
     }
 
     // Parse coordinates from various formats
@@ -414,38 +417,72 @@ class ButterflyInfiniteGalleryUpdater {
         return new Promise(resolve => setTimeout(resolve, ms));
     }
 
-    // Initialize map functionality
+    // Initialize map functionality with better error handling
     initMap() {
-        if (this.mapInitialized || !window.L) {
-            console.log('Map already initialized or Leaflet not available');
-            return;
+        if (!window.L) {
+            console.log('Leaflet not available - map functionality disabled');
+            return false;
         }
 
         const mapContainer = document.getElementById('butterfly-map');
         if (!mapContainer) {
             console.log('Map container not found');
-            return;
+            return false;
         }
 
-        this.map = L.map('butterfly-map').setView([39.8283, -98.5795], 4); // Center on US
+        // Don't reinitialize if already initialized
+        if (this.mapInitialized && this.map) {
+            console.log('Map already initialized, refreshing view');
+            this.refreshMapView();
+            return true;
+        }
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(this.map);
+        try {
+            // Clear any existing map instance
+            if (this.map) {
+                this.map.remove();
+            }
 
-        this.markerGroup = L.layerGroup().addTo(this.map);
-        this.mapInitialized = true;
+            this.map = L.map('butterfly-map').setView([39.8283, -98.5795], 4); // Center on US
 
-        console.log('Map initialized successfully');
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 18
+            }).addTo(this.map);
+
+            this.markerGroup = L.layerGroup().addTo(this.map);
+            this.mapInitialized = true;
+
+            console.log('Map initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Error initializing map:', error);
+            this.mapInitialized = false;
+            return false;
+        }
+    }
+
+    // Refresh map view and invalidate size
+    refreshMapView() {
+        if (this.mapInitialized && this.map) {
+            // Force map to recalculate size
+            setTimeout(() => {
+                this.map.invalidateSize();
+                this.map.panTo(this.map.getCenter()); // Trigger a redraw
+            }, 100);
+        }
     }
 
     // Update map with current filtered images
     updateMap() {
         if (!this.mapInitialized || !this.markerGroup) {
-            console.log('Map not initialized');
-            return;
+            console.log('Map not initialized, attempting to initialize');
+            if (!this.initMap()) {
+                return;
+            }
         }
 
+        // Clear existing markers
         this.markerGroup.clearLayers();
 
         // Get images with coordinates from current filtered set
@@ -472,18 +509,31 @@ class ButterflyInfiniteGalleryUpdater {
                 </div>
             `;
 
-            const marker = L.marker(img.coordinates)
-                .bindPopup(popupContent, { maxWidth: 250 })
-                .addTo(this.markerGroup);
+            try {
+                const marker = L.marker(img.coordinates)
+                    .bindPopup(popupContent, { maxWidth: 250 })
+                    .addTo(this.markerGroup);
+            } catch (error) {
+                console.error('Error adding marker for image:', img.species, error);
+            }
         });
 
         // Fit map to show all markers
         if (mappableImages.length > 0) {
-            const group = new L.featureGroup(this.markerGroup.getLayers());
-            this.map.fitBounds(group.getBounds().pad(0.1));
+            try {
+                const group = new L.featureGroup(this.markerGroup.getLayers());
+                if (group.getLayers().length > 0) {
+                    this.map.fitBounds(group.getBounds().pad(0.1));
+                }
+            } catch (error) {
+                console.error('Error fitting map bounds:', error);
+            }
         }
 
         this.updateMapStats(mappableImages);
+        
+        // Ensure map tiles are properly loaded
+        this.refreshMapView();
     }
 
     // Update map statistics
@@ -572,9 +622,6 @@ class ButterflyInfiniteGalleryUpdater {
         this.isLoading = false;
         this.currentPage = 1;
         
-        // Update map after data is loaded
-        this.updateMap();
-        
         console.log(`Total unique images loaded: ${this.allImages.length}`);
         const mappableCount = this.allImages.filter(img => img.hasCoordinates).length;
         console.log(`${mappableCount} images have coordinates for mapping`);
@@ -659,9 +706,6 @@ class ButterflyInfiniteGalleryUpdater {
         });
         
         this.currentPage = 1;
-        
-        // Update map with filtered results
-        this.updateMap();
         
         return this.filteredImages;
     }
@@ -855,8 +899,8 @@ class ButterflyInfiniteGalleryUpdater {
                 const cellWidth = `${100 / this.imagesPerRow}%`;
                 const hasCoords = image.hasCoordinates ? '🗺️' : '';
                 html += `
-                    <td align="center" style="width: ${cellWidth}; vertical-align: top;">
-                        <div class="species-img-container" style="border: 2px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: transform 0.3s ease;">
+                    <td align="center" style="width: ${cellWidth}; vertical-align: top; position: relative;">
+                        <div class="species-img-container" style="border: 2px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: transform 0.3s ease; position: relative;">
                             <a data-lightbox="infinite-butterflies-gallery" 
                                data-title="${image.fullTitle}" 
                                href="${image.fullImageUrl}">
@@ -958,12 +1002,24 @@ class ButterflyInfiniteGalleryUpdater {
             return false;
         }
         
+        // Store current map state
+        const wasMapVisible = this.mapVisible;
+        
         container.innerHTML = this.generateInfiniteGalleryHTML();
         
-        // Initialize map after container is updated
+        // Initialize or refresh map after container is updated
         setTimeout(() => {
-            this.initMap();
-            this.updateMap();
+            if (this.initMap()) {
+                this.updateMap();
+                // Restore map visibility state
+                if (!wasMapVisible) {
+                    const mapContainer = document.getElementById('butterfly-map');
+                    if (mapContainer) {
+                        mapContainer.style.display = 'none';
+                        this.mapVisible = false;
+                    }
+                }
+            }
         }, 100);
         
         return true;
@@ -1072,16 +1128,26 @@ function resetSearch() {
     infiniteGalleryUpdater.updateInfiniteGalleryContainer();
 }
 
-// Map-specific functions
+// Map-specific functions - improved with visibility tracking
 function toggleMapView() {
-    if (!infiniteGalleryUpdater || !infiniteGalleryUpdater.mapInitialized) return;
+    if (!infiniteGalleryUpdater || !infiniteGalleryUpdater.mapInitialized) {
+        console.log('Map not available for toggle');
+        return;
+    }
     
     const mapContainer = document.getElementById('butterfly-map');
+    if (!mapContainer) return;
+    
     if (mapContainer.style.display === 'none') {
         mapContainer.style.display = 'block';
-        infiniteGalleryUpdater.map.invalidateSize();
+        infiniteGalleryUpdater.mapVisible = true;
+        // Refresh map view when showing
+        setTimeout(() => {
+            infiniteGalleryUpdater.refreshMapView();
+        }, 100);
     } else {
         mapContainer.style.display = 'none';
+        infiniteGalleryUpdater.mapVisible = false;
     }
 }
 
@@ -1090,8 +1156,14 @@ function fitMapToBounds() {
     
     const mappableImages = infiniteGalleryUpdater.filteredImages.filter(img => img.hasCoordinates);
     if (mappableImages.length > 0) {
-        const group = new L.featureGroup(infiniteGalleryUpdater.markerGroup.getLayers());
-        infiniteGalleryUpdater.map.fitBounds(group.getBounds().pad(0.1));
+        try {
+            const group = new L.featureGroup(infiniteGalleryUpdater.markerGroup.getLayers());
+            if (group.getLayers().length > 0) {
+                infiniteGalleryUpdater.map.fitBounds(group.getBounds().pad(0.1));
+            }
+        } catch (error) {
+            console.error('Error fitting map bounds:', error);
+        }
     }
 }
 
@@ -1126,5 +1198,11 @@ function debugInfiniteGallery() {
             location: img.location,
             coordinates: img.coordinates
         })));
+        
+        // Map status
+        console.log('Map initialized:', infiniteGalleryUpdater.mapInitialized);
+        console.log('Map visible:', infiniteGalleryUpdater.mapVisible);
     }
 }
+
+//]]>
