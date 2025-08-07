@@ -33,21 +33,28 @@ function parseCoordinates(text) {
     
     // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
     const coordPatterns = [
-        // Most flexible pattern - handles various spacing
-        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
-        // Standard format with space: (36°34'41''N 105°26'26''W, 10227 ft.)
-        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
-        // Without parentheses but with space: 36°34'41''N 105°26'26''W
-        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-        // Without parentheses, no space: 36°34'41''N105°26'26''W
-        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-        // With various spacing and commas
-        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-        // Decimal degrees in parentheses
-        /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
-        // Simple decimal pattern
-        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
-    ];
+    // Flexible with spacing, now supports decimal seconds
+    /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9.]+)''([EW])[^)]*\)/,
+
+    // Standard format with space
+    /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9.]+)''([EW])[^)]*\)/,
+
+    // Without parentheses but with space
+    /([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9.]+)''([EW])/,
+
+    // Without parentheses, no space
+    /([0-9]+)°([0-9]+)'([0-9.]+)''([NS])([0-9]+)°([0-9]+)'([0-9.]+)''([EW])/,
+
+    // With various spacing and commas
+    /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9.]+)''([EW])/,
+
+    // Decimal degrees in parentheses
+    /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+
+    // Simple decimal pattern
+    /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
+];
+
 
     for (let pattern of coordPatterns) {
         const match = decodedText.match(pattern);
