@@ -3,6 +3,18 @@ let observations = [];
 let markers = [];
 let markerGroup;
 
+// Source URLs to load automatically
+const sourceUrls = [
+    "https://www.butterflyexplorers.com/p/new-butterflies.html",
+    "https://www.butterflyexplorers.com/p/dual-checklist.html",
+    "https://www.butterflyexplorers.com/p/butterflies-of-arizona.html",
+    "https://www.butterflyexplorers.com/p/butterflies-of-florida.html",
+    "https://www.butterflyexplorers.com/p/butterflies-of-texas.html",
+    "https://www.butterflyexplorers.com/p/butterflies-of-puerto-rico.html",
+    "https://www.butterflyexplorers.com/p/butterflies-of-new-mexico.html",
+    "https://www.butterflyexplorers.com/p/butterflies-of-panama.html"
+];
+
 // Initialize the map
 function initMap() {
     map = L.map('map').setView([39.8283, -98.5795], 4); // Center on US
@@ -24,28 +36,39 @@ function initMap() {
 function parseCoordinates(text) {
     if (!text) return null;
 
+    console.log('Parsing coordinates from:', text.substring(0, 100) + '...'); // Debug log
+
     // Decode HTML entities first - including degree symbol
     const decodedText = text
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
-        .replace(/&#176;/g, '°');
+        .replace(/&#176;/g, '°');  // Add this line to decode degree symbols
     
     // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
     const coordPatterns = [
+        // Most flexible pattern - handles various spacing
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Standard format with space: (36°34'41''N 105°26'26''W, 10227 ft.)
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Without parentheses but with space: 36°34'41''N 105°26'26''W
         /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Without parentheses, no space: 36°34'41''N105°26'26''W
         /([0-9]+)°([0-9]+)'([0-9]+)''([NS])([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // With various spacing and commas
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Decimal degrees in parentheses
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+        // Simple decimal pattern
         /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
     ];
 
     for (let pattern of coordPatterns) {
         const match = decodedText.match(pattern);
         if (match) {
+            console.log('Coordinate match found:', match); // Debug log
+            
             if (match.length >= 8) {
                 // DMS format
                 const latDeg = parseInt(match[1]);
@@ -64,6 +87,7 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
+                console.log('Parsed coordinates:', [lat, lon]); // Debug log
                 return [lat, lon];
             } else if (match.length >= 4) {
                 // Decimal format
@@ -75,137 +99,183 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
+                console.log('Parsed decimal coordinates:', [lat, lon]); // Debug log
                 return [lat, lon];
             }
         }
     }
 
+    // Try to find any numbers that look like coordinates
+    const numberPattern = /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/;
+    const numberMatch = decodedText.match(numberPattern);
+    if (numberMatch) {
+        const lat = parseFloat(numberMatch[1]);
+        const lon = parseFloat(numberMatch[2]);
+        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+            console.log('Fallback coordinate parsing:', [lat, lon]); // Debug log
+            return [lat, lon];
+        }
+    }
+
+    console.log('No coordinates found in:', decodedText.substring(0, 200)); // Debug log
     return null;
 }
 
-// Convert gallery images to map observations
-function convertGalleryImagesToObservations(galleryImages) {
-    const mapObservations = [];
-    
-    galleryImages.forEach((image) => {
-        // Only process images that have fullTitle (data-title) which contains coordinate info
-        if (!image.fullTitle || !image.hasDataTitle) {
-            return;
-        }
+// Extract observation data from HTML content
+function extractObservations(htmlContent, sourceUrl) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlContent, 'text/html');
+    const foundObservations = [];
+
+    // Find all image links with data-title attributes
+    const imageLinks = doc.querySelectorAll('a[data-title]');
+    console.log(`Found ${imageLinks.length} image links with data-title in ${getPageName(sourceUrl)}`);
+
+    imageLinks.forEach((link, index) => {
+        const dataTitle = link.getAttribute('data-title');
+        const img = link.querySelector('img');
         
-        // Parse coordinates from the fullTitle
-        const coordinates = parseCoordinates(image.fullTitle);
-        
-        if (coordinates) {
-            // Extract photographer from fullTitle
-            const photographerMatch = image.fullTitle.match(/©\s*([^&]+(?:&[^&]+)*)/);
-            let photographer = '';
-            if (photographerMatch) {
-                photographer = photographerMatch[1].trim();
+        if (dataTitle && img) {
+            console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...'); // Debug log
+            
+            // Decode HTML entities in data-title
+            const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            
+            // Parse species and common name - handle both <p4><i> and <i> formats
+            let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
+            if (!speciesMatch) {
+                speciesMatch = decodedTitle.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
+            }
+            
+            let species = 'Unknown Species';
+            let commonName = 'Unknown';
+
+            if (speciesMatch) {
+                species = speciesMatch[1].trim();
+                commonName = speciesMatch[2].trim();
+                console.log(`Parsed species: ${species} - ${commonName}`);
+            } else {
+                console.log('Could not parse species from title');
             }
 
-            mapObservations.push({
-                species: image.species,
-                commonName: image.commonName,
-                coordinates: coordinates,
-                location: image.location || '',
-                date: image.date ? (typeof image.date === 'string' ? image.date : image.date.toISOString().split('T')[0]) : '',
-                photographer: photographer,
-                imageUrl: image.thumbnailUrl,
-                fullImageUrl: image.fullImageUrl,
-                sourceUrl: image.sourceUrl,
-                originalTitle: image.fullTitle
-            });
+            // Parse coordinates
+            const coordinates = parseCoordinates(decodedTitle);
+            
+            if (coordinates) {
+                console.log(`Found coordinates: ${coordinates}`);
+                
+                // Extract location name - everything between <br/> and coordinates
+                let location = '';
+                const locationPatterns = [
+                    /<br\/?>\s*([^(]+?)(?:\s+\([0-9])/,  // Location before coordinates
+                    /<br\/?>\s*([^(]+?)$/,               // Location at end
+                    /<br\/?>\s*([^<]+?)\s+\d{4}\/\d{2}\/\d{2}/ // Location before date
+                ];
+                
+                for (let pattern of locationPatterns) {
+                    const locationMatch = decodedTitle.match(pattern);
+                    if (locationMatch) {
+                        location = locationMatch[1].trim();
+                        break;
+                    }
+                }
+
+                // Extract date
+                const dateMatch = decodedTitle.match(/(\d{4}\/\d{2}\/\d{2})/);
+                let date = '';
+                if (dateMatch) {
+                    date = dateMatch[1];
+                }
+
+                // Extract photographer
+                const photographerMatch = decodedTitle.match(/©\s*([^&]+(?:&[^&]+)*)/);
+                let photographer = '';
+                if (photographerMatch) {
+                    photographer = photographerMatch[1].trim();
+                }
+
+                foundObservations.push({
+                    species: species,
+                    commonName: commonName,
+                    coordinates: coordinates,
+                    location: location,
+                    date: date,
+                    photographer: photographer,
+                    imageUrl: img.getAttribute('src'),
+                    fullImageUrl: link.getAttribute('href'),
+                    sourceUrl: sourceUrl,
+                    originalTitle: decodedTitle
+                });
+                
+                console.log(`Added observation: ${species} at ${location}`);
+            } else {
+                console.log(`No coordinates found for: ${species} - ${commonName}`);
+            }
         }
     });
 
-    return mapObservations;
+    console.log(`Extracted ${foundObservations.length} observations with coordinates from ${getPageName(sourceUrl)}`);
+    return foundObservations;
 }
 
-// Hook into the gallery's refresh cycle
-function hookIntoGallery() {
-    // Store original scanAllPages method
-    if (window.infiniteGalleryUpdater && typeof window.infiniteGalleryUpdater.scanAllPages === 'function') {
-        const originalScanAllPages = window.infiniteGalleryUpdater.scanAllPages.bind(window.infiniteGalleryUpdater);
-        
-        // Override it to include our map update
-        window.infiniteGalleryUpdater.scanAllPages = async function() {
-            console.log('Gallery scanning pages - map will update after...');
-            
-            // Call the original method
-            const result = await originalScanAllPages();
-            
-            // Update map after gallery is done
-            setTimeout(() => {
-                updateMapFromGallery();
-            }, 1000);
-            
-            return result;
-        };
-        
-        console.log('Successfully hooked into gallery refresh cycle');
-        return true;
-    }
-    
-    return false;
-}
-
-// Update map from gallery data
-function updateMapFromGallery() {
-    if (!window.infiniteGalleryUpdater || !window.infiniteGalleryUpdater.allImages) {
-        console.log('Gallery data not available yet');
-        return false;
-    }
-    
-    console.log('Updating map from gallery data...');
-    
+// Load observations from source URLs automatically
+async function loadObservations() {
     const loadingDiv = document.getElementById('loading');
-    if (loadingDiv) {
-        loadingDiv.style.display = 'block';
-        loadingDiv.textContent = 'Loading observations from gallery data...';
-    }
+    loadingDiv.style.display = 'block';
     
-    // Convert gallery images to observations
-    const galleryImages = window.infiniteGalleryUpdater.allImages;
-    observations = convertGalleryImagesToObservations(galleryImages);
-    
-    if (loadingDiv) {
-        loadingDiv.style.display = 'none';
-    }
-    
-    console.log(`Map updated with ${observations.length} observations from gallery`);
-    displayObservations();
-    return true;
-}
+    observations = [];
+    clearMap();
 
-// Original loadObservations function - now redirects to gallery
-function loadObservations() {
-    console.log('loadObservations called - checking for gallery data...');
-    
-    if (window.infiniteGalleryUpdater && window.infiniteGalleryUpdater.allImages && window.infiniteGalleryUpdater.allImages.length > 0) {
-        return updateMapFromGallery();
-    } else {
-        // If gallery isn't ready, try to trigger it
-        console.log('Gallery not ready, attempting to initialize...');
-        const loadingDiv = document.getElementById('loading');
-        if (loadingDiv) {
-            loadingDiv.style.display = 'block';
-            loadingDiv.textContent = 'Waiting for gallery to load...';
+    let totalLoaded = 0;
+    const errors = [];
+
+    for (const url of sourceUrls) {
+        try {
+            loadingDiv.textContent = `Loading from ${getPageName(url)}...`;
+            
+            // Use CORS proxy for cross-origin requests
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+            const response = await fetch(proxyUrl);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const htmlContent = await response.text();
+            const siteObservations = extractObservations(htmlContent, url);
+            
+            observations.push(...siteObservations);
+            totalLoaded += siteObservations.length;
+            
+            console.log(`Loaded ${siteObservations.length} observations from ${getPageName(url)}`);
+            
+        } catch (error) {
+            console.error(`Error loading ${url}:`, error);
+            errors.push(`${getPageName(url)}: ${error.message}`);
         }
-        
-        // Try to trigger gallery loading if it exists
-        if (window.infiniteGalleryUpdater && typeof window.infiniteGalleryUpdater.scanAllPages === 'function') {
-            window.infiniteGalleryUpdater.scanAllPages();
-        }
-        
-        return false;
+
+        // Add delay to be respectful to servers
+        await new Promise(resolve => setTimeout(resolve, 1000));
     }
+
+    loadingDiv.style.display = 'none';
+
+    if (errors.length > 0) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'error';
+        errorDiv.innerHTML = `<strong>Errors encountered:</strong><br>${errors.join('<br>')}`;
+        errorDiv.style.cssText = 'background: #ffebee; border: 1px solid #f44336; color: #c62828; padding: 10px; margin: 10px 0; border-radius: 4px;';
+        document.querySelector('.container').insertBefore(errorDiv, document.getElementById('map'));
+        
+        setTimeout(() => errorDiv.remove(), 10000);
+    }
+
+    console.log(`Total observations loaded: ${observations.length}`);
+    displayObservations();
 }
 
 // Display observations on the map
 function displayObservations() {
-    if (!markerGroup) return;
-    
     markerGroup.clearLayers();
 
     const filteredObs = getCurrentFilteredObservations();
@@ -213,13 +283,13 @@ function displayObservations() {
     filteredObs.forEach(obs => {
         const popupContent = `
             <div>
-                <div class="popup-species" style="font-style: italic; font-weight: bold;">${obs.species}</div>
-                <div class="popup-common" style="font-weight: bold; margin-bottom: 10px;">${obs.commonName}</div>
-                ${obs.imageUrl ? `<img src="${obs.imageUrl}" class="popup-image" alt="${obs.species}" style="max-width: 200px; height: auto; margin-bottom: 10px;" onerror="this.style.display='none'">` : ''}
-                <div class="popup-location" style="margin-bottom: 5px;">📍 ${obs.location}</div>
-                ${obs.date ? `<div class="popup-date" style="margin-bottom: 5px;">📅 ${obs.date}</div>` : ''}
-                ${obs.photographer ? `<div class="popup-photographer" style="margin-bottom: 5px;">📷 ${obs.photographer}</div>` : ''}
-                <div class="popup-source" style="margin-bottom: 5px;">🔗 ${getPageName(obs.sourceUrl)}</div>
+                <div class="popup-species">${obs.species}</div>
+                <div class="popup-common">${obs.commonName}</div>
+                ${obs.imageUrl ? `<img src="${obs.imageUrl}" class="popup-image" alt="${obs.species}" onerror="this.style.display='none'">` : ''}
+                <div class="popup-location">📍 ${obs.location}</div>
+                ${obs.date ? `<div class="popup-date">📅 ${obs.date}</div>` : ''}
+                ${obs.photographer ? `<div class="popup-date">📷 ${obs.photographer}</div>` : ''}
+                <div class="popup-date">🔗 ${getPageName(obs.sourceUrl)}</div>
             </div>
         `;
 
@@ -262,7 +332,6 @@ function clearMap() {
     if (markerGroup) {
         markerGroup.clearLayers();
     }
-    observations = [];
     updateStats();
 }
 
@@ -322,44 +391,19 @@ function getPageName(url) {
     return 'Unknown';
 }
 
-// Initialize everything when DOM is ready
+// Initialize the application and AUTO-LOAD data
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Map script initializing...');
+    console.log('Initializing butterfly map with auto-loading...');
     initMap();
     
-    // Try to hook into gallery immediately if it exists
-    if (window.infiniteGalleryUpdater) {
-        hookIntoGallery();
-        // If gallery already has data, use it
-        if (window.infiniteGalleryUpdater.allImages && window.infiniteGalleryUpdater.allImages.length > 0) {
-            updateMapFromGallery();
-        }
-    } else {
-        // Wait for gallery to be created
-        let attempts = 0;
-        const maxAttempts = 50; // 10 seconds
-        
-        const checkForGallery = setInterval(() => {
-            attempts++;
-            
-            if (window.infiniteGalleryUpdater) {
-                console.log('Gallery found, hooking in...');
-                clearInterval(checkForGallery);
-                hookIntoGallery();
-                
-                // If gallery already has data, use it
-                if (window.infiniteGalleryUpdater.allImages && window.infiniteGalleryUpdater.allImages.length > 0) {
-                    updateMapFromGallery();
-                }
-            } else if (attempts >= maxAttempts) {
-                console.log('Gallery not found after 10 seconds');
-                clearInterval(checkForGallery);
-            }
-        }, 200);
-    }
+    // Automatically load observations on page load
+    setTimeout(() => {
+        console.log('Auto-loading observations...');
+        loadObservations();
+    }, 1000);
 });
 
-// Make key functions global
-window.loadObservations = loadObservations;
-window.clearMap = clearMap;
-window.updateMapFromGallery = updateMapFromGallery;
+// Manual refresh function for the button
+function refreshMap() {
+    loadObservations();
+}
