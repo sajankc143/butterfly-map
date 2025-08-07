@@ -434,57 +434,98 @@ function getPageName(url) {
 }
 
 // Initialize the application and AUTO-LOAD data
-// GitHub Pages-specific initialization
-function initializeMapForGitHub() {
-    console.log('=== INITIALIZING FOR GITHUB PAGES ===');
+// GitHub Pages - Just click the button automatically!
+function autoClickLoadButton() {
+    console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON ===');
     
-    // Ensure all required elements exist
-    const mapDiv = document.getElementById('map');
-    const loadingDiv = document.getElementById('loading');
+    // Find the load button by its onclick attribute
+    const buttons = document.querySelectorAll('button');
+    let loadButton = null;
     
-    if (!mapDiv) {
-        console.log('Map div not found, retrying in 500ms...');
-        setTimeout(initializeMapForGitHub, 500);
-        return;
+    for (let button of buttons) {
+        if (button.onclick && button.onclick.toString().includes('loadObservations')) {
+            loadButton = button;
+            break;
+        }
+        if (button.getAttribute('onclick') && button.getAttribute('onclick').includes('loadObservations')) {
+            loadButton = button;
+            break;
+        }
+        if (button.textContent.includes('Load') || button.textContent.includes('Refresh')) {
+            loadButton = button;
+            break;
+        }
     }
     
-    if (typeof L === 'undefined') {
-        console.log('Leaflet not loaded yet, retrying in 500ms...');
-        setTimeout(initializeMapForGitHub, 500);
-        return;
+    if (loadButton) {
+        console.log('Found load button, clicking it...');
+        loadButton.click();
+        return true;
+    } else {
+        console.log('Load button not found');
+        return false;
     }
+}
+
+// Simple initialization
+function initializeMapSimple() {
+    console.log('=== SIMPLE GITHUB PAGES INITIALIZATION ===');
     
+    // Initialize map if not already done
     if (typeof map === 'undefined') {
-        console.log('Initializing map...');
-        initMap();
+        const mapDiv = document.getElementById('map');
+        if (mapDiv && typeof L !== 'undefined') {
+            console.log('Initializing map...');
+            initMap();
+        } else {
+            console.log('Map div or Leaflet not ready, retrying...');
+            return false;
+        }
     }
     
-    if (!isLoading && observations.length === 0) {
-        console.log('=== STARTING AUTO-LOAD FOR GITHUB PAGES ===');
-        loadObservations();
+    // Try auto-clicking the load button
+    if (observations.length === 0 && !isLoading) {
+        return autoClickLoadButton();
     }
+    
+    return true;
 }
 
-// Immediate execution - no event waiting
-console.log('Script executing immediately...');
-if (document.readyState === 'loading') {
-    console.log('Document still loading, setting up event listeners...');
-    document.addEventListener('DOMContentLoaded', initializeMapForGitHub);
-} else {
-    console.log('Document already loaded, initializing immediately...');
-    initializeMapForGitHub();
+// Multiple attempts with the simple approach
+console.log('Setting up auto-load for GitHub Pages...');
+
+// Try immediately if document is ready
+if (document.readyState !== 'loading') {
+    setTimeout(initializeMapSimple, 500);
 }
 
-// Additional fallbacks for GitHub Pages
-setTimeout(initializeMapForGitHub, 1000);
-setTimeout(initializeMapForGitHub, 3000);
-setTimeout(initializeMapForGitHub, 6000);
-
-// Window load event as final backup
-window.addEventListener('load', () => {
-    console.log('Window fully loaded');
-    setTimeout(initializeMapForGitHub, 500);
+// Try after DOM content loaded
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('DOM loaded, attempting auto-load...');
+    setTimeout(initializeMapSimple, 500);
 });
+
+// Try after window fully loads
+window.addEventListener('load', () => {
+    console.log('Window loaded, attempting auto-load...');
+    setTimeout(initializeMapSimple, 500);
+});
+
+// Backup attempts
+setTimeout(() => {
+    console.log('Backup attempt 1 (2s)');
+    initializeMapSimple();
+}, 2000);
+
+setTimeout(() => {
+    console.log('Backup attempt 2 (4s)');
+    initializeMapSimple();
+}, 4000);
+
+setTimeout(() => {
+    console.log('Final attempt (7s)');
+    initializeMapSimple();
+}, 7000);
 
 // Manual refresh function for the button
 function refreshMap() {
@@ -492,18 +533,22 @@ function refreshMap() {
     loadObservations();
 }
 
-// Debug function to check environment
-function checkEnvironment() {
-    console.log('=== ENVIRONMENT CHECK ===');
-    console.log('Document ready state:', document.readyState);
-    console.log('Leaflet loaded:', typeof L !== 'undefined');
-    console.log('Map div exists:', !!document.getElementById('map'));
-    console.log('Loading div exists:', !!document.getElementById('loading'));
+// Simpler debug function
+function debugGitHub() {
+    console.log('=== GITHUB DEBUG ===');
+    console.log('Document ready:', document.readyState);
+    console.log('Leaflet available:', typeof L !== 'undefined');
+    console.log('Map exists:', !!document.getElementById('map'));
     console.log('Map initialized:', typeof map !== 'undefined');
-    console.log('Observations count:', observations.length);
-    console.log('Currently loading:', isLoading);
-    console.log('=== END CHECK ===');
+    console.log('Observations:', observations.length);
+    console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
+    
+    // Try to find the load button
+    const buttons = document.querySelectorAll('button');
+    buttons.forEach((btn, i) => {
+        console.log(`Button ${i}:`, btn.textContent, btn.getAttribute('onclick'));
+    });
 }
 
-// Auto-run environment check
-setTimeout(checkEnvironment, 2000);
+// Run debug after a delay
+setTimeout(debugGitHub, 3000);
