@@ -432,48 +432,43 @@ document.addEventListener('DOMContentLoaded', () => {
     initMap();
     console.log('Map initialized');
     
-    // Multiple attempts to auto-load
-    console.log('Setting up auto-load timers...');
+    // IMMEDIATE auto-load - no delay
+    console.log('=== TRIGGERING IMMEDIATE AUTO-LOAD ===');
+    loadObservations();
     
+    // Also set backup timers in case the immediate one fails
     setTimeout(() => {
-        console.log('=== AUTO-LOAD ATTEMPT 1 (500ms) ===');
-        loadObservations();
-    }, 500);
-    
-    setTimeout(() => {
-        console.log('=== AUTO-LOAD ATTEMPT 2 (2000ms) ===');
+        console.log('=== BACKUP AUTO-LOAD ATTEMPT (2000ms) ===');
         if (observations.length === 0) {
-            console.log('No observations loaded yet, trying again...');
+            console.log('No observations loaded yet, trying backup...');
             loadObservations();
-        } else {
-            console.log('Observations already loaded, skipping');
         }
     }, 2000);
-    
-    setTimeout(() => {
-        console.log('=== AUTO-LOAD ATTEMPT 3 (5000ms) ===');
-        if (observations.length === 0) {
-            console.log('Still no observations, final attempt...');
-            loadObservations();
-        } else {
-            console.log('Observations already loaded, skipping final attempt');
-        }
-    }, 5000);
 });
 
-// Check if we can trigger immediately
-if (document.readyState === 'loading') {
-    console.log('Document still loading, waiting for DOMContentLoaded');
-} else {
-    console.log('Document already loaded, triggering immediately');
+// ALSO trigger if document is already ready
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    console.log('Document already ready, triggering immediate load');
     setTimeout(() => {
-        console.log('=== IMMEDIATE AUTO-LOAD ===');
-        if (typeof initMap === 'function') {
+        if (typeof map === 'undefined') {
             initMap();
-            loadObservations();
         }
+        loadObservations();
     }, 100);
 }
+
+// FORCE auto-load after a short delay regardless of document state
+setTimeout(() => {
+    console.log('=== FORCED AUTO-LOAD (1000ms) ===');
+    if (typeof map === 'undefined') {
+        console.log('Map not initialized, initializing now...');
+        initMap();
+    }
+    if (observations.length === 0) {
+        console.log('No observations loaded, forcing load...');
+        loadObservations();
+    }
+}, 1000);
 
 // Manual refresh function for the button
 function refreshMap() {
