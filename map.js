@@ -379,6 +379,51 @@ function addRefreshButton() {
     document.body.appendChild(refreshButton);
 }
 
+// Override the original loadObservations function to use gallery data
+function loadObservations() {
+    console.log('loadObservations() called - using gallery data instead of URLs');
+    return loadObservationsFromGallery();
+}
+
+// Auto-load when gallery data becomes available
+function waitForGalleryAndLoad() {
+    const maxAttempts = 30; // 30 seconds max wait
+    let attempts = 0;
+    
+    const checkInterval = setInterval(() => {
+        attempts++;
+        
+        if (window.infiniteGalleryUpdater && 
+            window.infiniteGalleryUpdater.allImages && 
+            window.infiniteGalleryUpdater.allImages.length > 0) {
+            
+            console.log('Gallery data found, loading map observations...');
+            clearInterval(checkInterval);
+            loadObservationsFromGallery();
+            
+        } else if (attempts >= maxAttempts) {
+            console.warn('Gallery data not found after 30 seconds, you may need to manually refresh');
+            clearInterval(checkInterval);
+            
+            // Show a message to the user
+            const loadingDiv = document.getElementById('loading');
+            if (loadingDiv) {
+                loadingDiv.style.display = 'block';
+                loadingDiv.innerHTML = `
+                    <div style="color: orange;">
+                        Gallery data not yet available. 
+                        <button onclick="loadObservationsFromGallery()" style="margin-left: 10px; padding: 5px 10px;">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        } else {
+            console.log(`Waiting for gallery data... (${attempts}/30)`);
+        }
+    }, 1000);
+}
+
 // Initialize the application
 document.addEventListener('DOMContentLoaded', () => {
     initMap();
@@ -391,13 +436,21 @@ document.addEventListener('DOMContentLoaded', () => {
     // Setup watcher for gallery data
     setupGalleryDataWatcher();
     
-    // Try initial load in case gallery is already loaded
+    // Wait for gallery data and auto-load
+    waitForGalleryAndLoad();
+    
+    // Also try immediate load in case gallery is already loaded
     setTimeout(() => {
-        loadObservationsFromGallery();
-    }, 2000);
+        if (window.infiniteGalleryUpdater && 
+            window.infiniteGalleryUpdater.allImages && 
+            window.infiniteGalleryUpdater.allImages.length > 0) {
+            loadObservationsFromGallery();
+        }
+    }, 500);
 });
 
-// Make functions available globally for debugging
+// Make functions available globally
+window.loadObservations = loadObservations; // Override the original function
 window.loadObservationsFromGallery = loadObservationsFromGallery;
 window.refreshMapFromGallery = refreshMapFromGallery;
 window.testCoordinateParsing = testCoordinateParsing;
