@@ -1151,19 +1151,23 @@ function debugInfiniteGallery() {
 
 // INITIALIZATION
 document.addEventListener('DOMContentLoaded', async () => {
-   initMap();
-   
-   infiniteGalleryUpdater = new ButterflyInfiniteGalleryUpdater({
-       daysThreshold: 365,
-       imagesPerRow: 6,
-       speciesPerPage: 100
-   });
-   
-   infiniteGalleryUpdater.setOnDataUpdateCallback(() => {
-       displayMapObservations();
-   });
-   
-  await window.infiniteGalleryUpdater.init();
+    console.log('Initializing butterfly gallery and map...');
+    
+    try {
+        initMap();
+        console.log('Map initialized');
+        
+        window.infiniteGalleryUpdater = new ButterflyInfiniteGalleryUpdater({
+            daysThreshold: 365,
+            imagesPerRow: 6,
+            speciesPerPage: 100
+        });
+        
+        window.infiniteGalleryUpdater.setOnDataUpdateCallback(() => {
+            displayMapObservations();
+        });
+        
+        await window.infiniteGalleryUpdater.init();
         console.log('Gallery and map integration complete!');
         
     } catch (error) {
