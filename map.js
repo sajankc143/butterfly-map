@@ -18,7 +18,6 @@
             document.getElementById('speciesFilter').addEventListener('input', filterObservations);
         }
 
-        // Parse coordinates from various formats
        // Parse coordinates from various formats
 function parseCoordinates(text) {
     if (!text) return null;
@@ -35,11 +34,15 @@ function parseCoordinates(text) {
     
     // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
     const coordPatterns = [
-        // Standard format: (36°34'41''N 105°26'26''W, 10227 ft.)
+        // Most flexible pattern - handles various spacing
+        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Standard format with space: (36°34'41''N 105°26'26''W, 10227 ft.)
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
-        // Without parentheses: 36°34'41''N 105°26'26''W
+        // Without parentheses but with space: 36°34'41''N 105°26'26''W
         /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-        // With spaces in different places
+        // Without parentheses, no space: 36°34'41''N105°26'26''W
+        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // With various spacing and commas
         /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
         // Decimal degrees in parentheses
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
@@ -103,7 +106,6 @@ function parseCoordinates(text) {
     console.log('No coordinates found in:', decodedText); // Debug log
     return null;
 }
-
         // Extract observation data from HTML content
         function extractObservations(htmlContent, sourceUrl) {
             const parser = new DOMParser();
