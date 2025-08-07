@@ -1,4 +1,4 @@
-let map;
+ let map;
         let observations = [];
         let markers = [];
         let markerGroup;
@@ -33,28 +33,21 @@ function parseCoordinates(text) {
     
     // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
     const coordPatterns = [
-    // Flexible with spacing, now supports decimal seconds
-    /\(\s*([0-9]+)°\s*([0-9]+)'\s*([0-9.]+)''\s*([NS])\s*([0-9]+)°\s*([0-9]+)'\s*([0-9.]+)''\s*([EW])[^)]*\)/,
-
-    // Standard format with space
-    /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9.]+)''([EW])[^)]*\)/,
-
-    // Without parentheses but with space
-    /([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9.]+)''([EW])/,
-
-    // Without parentheses, no space
-    /([0-9]+)°([0-9]+)'([0-9.]+)''([NS])([0-9]+)°([0-9]+)'([0-9.]+)''([EW])/,
-
-    // With various spacing and commas
-    /\(([0-9]+)°([0-9]+)'([0-9.]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9.]+)''([EW])/,
-
-    // Decimal degrees in parentheses
-    /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
-
-    // Simple decimal pattern
-    /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
-];
-
+        // Most flexible pattern - handles various spacing
+        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Standard format with space: (36°34'41''N 105°26'26''W, 10227 ft.)
+        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
+        // Without parentheses but with space: 36°34'41''N 105°26'26''W
+        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Without parentheses, no space: 36°34'41''N105°26'26''W
+        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // With various spacing and commas
+        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Decimal degrees in parentheses
+        /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+        // Simple decimal pattern
+        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
+    ];
 
     for (let pattern of coordPatterns) {
         const match = decodedText.match(pattern);
@@ -64,15 +57,14 @@ function parseCoordinates(text) {
             if (match.length >= 8) {
                 // DMS format
                 const latDeg = parseInt(match[1]);
-const latMin = parseInt(match[2]);
-const latSec = parseFloat(match[3]);  // <-- CHANGE parseInt to parseFloat here
-const latDir = match[4];
-
-const lonDeg = parseInt(match[5]);
-const lonMin = parseInt(match[6]);
-const lonSec = parseFloat(match[7]);  // <-- CHANGE parseInt to parseFloat here
-const lonDir = match[8];
-
+                const latMin = parseInt(match[2]);
+                const latSec = parseInt(match[3]);
+                const latDir = match[4];
+                
+                const lonDeg = parseInt(match[5]);
+                const lonMin = parseInt(match[6]);
+                const lonSec = parseInt(match[7]);
+                const lonDir = match[8];
 
                 let lat = latDeg + latMin/60 + latSec/3600;
                 let lon = lonDeg + lonMin/60 + lonSec/3600;
@@ -121,14 +113,14 @@ const lonDir = match[8];
 
             // Find all image links with data-title attributes
             const imageLinks = doc.querySelectorAll('a[data-title]');
-            console.log(`Found ${imageLinks.length} image links with data-title in ${getPageName(sourceUrl)}`);
+            console.log(Found ${imageLinks.length} image links with data-title in ${getPageName(sourceUrl)});
 
             imageLinks.forEach((link, index) => {
                 const dataTitle = link.getAttribute('data-title');
                 const img = link.querySelector('img');
                 
                 if (dataTitle && img) {
-                    console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...'); // Debug log
+                    console.log(Processing image ${index + 1}:, dataTitle.substring(0, 100) + '...'); // Debug log
                     
                     // Decode HTML entities in data-title
                     const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
@@ -145,7 +137,7 @@ const lonDir = match[8];
                     if (speciesMatch) {
                         species = speciesMatch[1].trim();
                         commonName = speciesMatch[2].trim();
-                        console.log(`Parsed species: ${species} - ${commonName}`);
+                        console.log(Parsed species: ${species} - ${commonName});
                     } else {
                         console.log('Could not parse species from title');
                     }
@@ -154,7 +146,7 @@ const lonDir = match[8];
                     const coordinates = parseCoordinates(decodedTitle);
                     
                     if (coordinates) {
-                        console.log(`Found coordinates: ${coordinates}`);
+                        console.log(Found coordinates: ${coordinates});
                         
                         // Extract location name - everything between <br/> and coordinates
                         let location = '';
@@ -199,14 +191,14 @@ const lonDir = match[8];
                             originalTitle: decodedTitle
                         });
                         
-                        console.log(`Added observation: ${species} at ${location}`);
+                        console.log(Added observation: ${species} at ${location});
                     } else {
-                        console.log(`No coordinates found for: ${species} - ${commonName}`);
+                        console.log(No coordinates found for: ${species} - ${commonName});
                     }
                 }
             });
 
-            console.log(`Extracted ${foundObservations.length} observations with coordinates from ${getPageName(sourceUrl)}`);
+            console.log(Extracted ${foundObservations.length} observations with coordinates from ${getPageName(sourceUrl)});
             return foundObservations;
         }
 
@@ -228,14 +220,14 @@ const lonDir = match[8];
 
             for (const url of sourceUrls) {
                 try {
-                    loadingDiv.textContent = `Loading from ${getPageName(url)}...`;
+                    loadingDiv.textContent = Loading from ${getPageName(url)}...;
                     
                     // Use CORS proxy for cross-origin requests
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                    const proxyUrl = https://api.allorigins.win/raw?url=${encodeURIComponent(url)};
                     const response = await fetch(proxyUrl);
                     
                     if (!response.ok) {
-                        throw new Error(`HTTP ${response.status}`);
+                        throw new Error(HTTP ${response.status});
                     }
                     
                     const htmlContent = await response.text();
@@ -244,11 +236,11 @@ const lonDir = match[8];
                     observations.push(...siteObservations);
                     totalLoaded += siteObservations.length;
                     
-                    console.log(`Loaded ${siteObservations.length} observations from ${getPageName(url)}`);
+                    console.log(Loaded ${siteObservations.length} observations from ${getPageName(url)});
                     
                 } catch (error) {
-                    console.error(`Error loading ${url}:`, error);
-                    errors.push(`${getPageName(url)}: ${error.message}`);
+                    console.error(Error loading ${url}:, error);
+                    errors.push(${getPageName(url)}: ${error.message});
                 }
 
                 // Add delay to be respectful to servers
@@ -260,13 +252,13 @@ const lonDir = match[8];
             if (errors.length > 0) {
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error';
-                errorDiv.innerHTML = `<strong>Errors encountered:</strong><br>${errors.join('<br>')}`;
+                errorDiv.innerHTML = <strong>Errors encountered:</strong><br>${errors.join('<br>')};
                 document.querySelector('.container').insertBefore(errorDiv, document.getElementById('map'));
                 
                 setTimeout(() => errorDiv.remove(), 10000);
             }
 
-            console.log(`Total observations loaded: ${observations.length}`);
+            console.log(Total observations loaded: ${observations.length});
             displayObservations();
         }
 
@@ -277,17 +269,17 @@ const lonDir = match[8];
             const filteredObs = getCurrentFilteredObservations();
 
             filteredObs.forEach(obs => {
-                const popupContent = `
+                const popupContent = 
                     <div>
                         <div class="popup-species">${obs.species}</div>
                         <div class="popup-common">${obs.commonName}</div>
-                        ${obs.imageUrl ? `<img src="${obs.imageUrl}" class="popup-image" alt="${obs.species}" onerror="this.style.display='none'">` : ''}
+                        ${obs.imageUrl ? <img src="${obs.imageUrl}" class="popup-image" alt="${obs.species}" onerror="this.style.display='none'"> : ''}
                         <div class="popup-location">📍 ${obs.location}</div>
-                        ${obs.date ? `<div class="popup-date">📅 ${obs.date}</div>` : ''}
-                        ${obs.photographer ? `<div class="popup-date">📷 ${obs.photographer}</div>` : ''}
+                        ${obs.date ? <div class="popup-date">📅 ${obs.date}</div> : ''}
+                        ${obs.photographer ? <div class="popup-date">📷 ${obs.photographer}</div> : ''}
                         <div class="popup-date">🔗 ${getPageName(obs.sourceUrl)}</div>
                     </div>
-                `;
+                ;
 
                 const marker = L.marker(obs.coordinates)
                     .bindPopup(popupContent)
@@ -342,7 +334,7 @@ const lonDir = match[8];
                 sourceCounts[pageName] = (sourceCounts[pageName] || 0) + 1;
             });
 
-            const statsHtml = `
+            const statsHtml = 
                 <div class="stat-card">
                     <div class="stat-number">${filteredObs.length}</div>
                     <div class="stat-label">Total Observations</div>
@@ -359,7 +351,7 @@ const lonDir = match[8];
                     <div class="stat-number">${Object.keys(sourceCounts).length}</div>
                     <div class="stat-label">Source Pages</div>
                 </div>
-            `;
+            ;
 
             document.getElementById('stats').innerHTML = statsHtml;
         }
@@ -394,7 +386,7 @@ const lonDir = match[8];
             ];
             
             testData.forEach((test, index) => {
-                console.log(`\nTest ${index + 1}:`);
+                console.log(\nTest ${index + 1}:);
                 console.log('Input:', test);
                 const coords = parseCoordinates(test);
                 console.log('Parsed coordinates:', coords);
