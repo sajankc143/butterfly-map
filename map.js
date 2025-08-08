@@ -142,7 +142,7 @@ function extractObservations(htmlContent, sourceUrl) {
             // Decode HTML entities in data-title
             const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
             
-            // Parse species and common name - handle both <p4><i> and <i> formats
+            
            
 let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+?)<\/a><\/p4>/);
 if (!speciesMatch) {
