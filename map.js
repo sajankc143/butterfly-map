@@ -33,7 +33,7 @@ function initMap() {
     }
 }
 
-// Parse coordinates from various formats
+// Updated parseCoordinates function with decimal seconds support
 function parseCoordinates(text) {
     if (!text) return null;
 
@@ -48,17 +48,18 @@ function parseCoordinates(text) {
         .replace(/&#176;/g, '°');  // Add this line to decode degree symbols
     
     // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
+    // UPDATED: Changed [0-9]+ to [0-9]+(?:\.[0-9]+)? for decimal seconds support
     const coordPatterns = [
-        // Most flexible pattern - handles various spacing
-        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
-        // Standard format with space: (36°34'41''N 105°26'26''W, 10227 ft.)
-        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])[^)]*\)/,
-        // Without parentheses but with space: 36°34'41''N 105°26'26''W
-        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
-        // Without parentheses, no space: 36°34'41''N105°26'26''W
-        /([0-9]+)°([0-9]+)'([0-9]+)''([NS])([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        // Most flexible pattern - handles various spacing AND DECIMAL SECONDS
+        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
+        // Standard format with space: (36°34'41.1''N 105°26'26.5''W, 10227 ft.)
+        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
+        // Without parentheses but with space: 36°34'41.1''N 105°26'26.5''W
+        /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
+        // Without parentheses, no space: 36°34'41.1''N105°26'26.5''W
+        /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
         // With various spacing and commas
-        /\(([0-9]+)°([0-9]+)'([0-9]+)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+)''([EW])/,
+        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
         // Decimal degrees in parentheses
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
         // Simple decimal pattern
@@ -71,15 +72,15 @@ function parseCoordinates(text) {
             console.log('Coordinate match found:', match); // Debug log
             
             if (match.length >= 8) {
-                // DMS format
+                // DMS format with decimal seconds support
                 const latDeg = parseInt(match[1]);
                 const latMin = parseInt(match[2]);
-                const latSec = parseInt(match[3]);
+                const latSec = parseFloat(match[3]); // CHANGED: parseFloat instead of parseInt
                 const latDir = match[4];
                 
                 const lonDeg = parseInt(match[5]);
                 const lonMin = parseInt(match[6]);
-                const lonSec = parseInt(match[7]);
+                const lonSec = parseFloat(match[7]); // CHANGED: parseFloat instead of parseInt
                 const lonDir = match[8];
 
                 let lat = latDeg + latMin/60 + latSec/3600;
