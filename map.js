@@ -142,13 +142,14 @@ function extractObservations(htmlContent, sourceUrl) {
             // Decode HTML entities in data-title
             const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
             
-            
-           
-// Parse species and common name - handle both <p4><i> and <i> formats
-let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
-if (!speciesMatch) {
-    speciesMatch = decodedTitle.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
-}
+            // Parse species and common name - handle both <p4><i> and <i> formats, including broken </a> tags
+            let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+?)<\/a><\/p4>/);
+            if (!speciesMatch) {
+                speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
+            }
+            if (!speciesMatch) {
+                speciesMatch = decodedTitle.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
+            }
             
             let species = 'Unknown Species';
             let commonName = 'Unknown';
@@ -221,7 +222,6 @@ if (!speciesMatch) {
     return foundObservations;
 }
 
-
 // Robust loading function with multiple proxy fallbacks and retry logic
 async function loadObservations() {
     if (isLoading) {
@@ -241,17 +241,29 @@ async function loadObservations() {
     observations = [];
     clearMap();
 
-    // Multiple CORS proxy services as fallbacks
+    // Better proxy services with multiple fallbacks
     const proxyServices = [
-        'https://api.allorigins.win/raw?url=',
-        'https://cors-anywhere.herokuapp.com/',
-        'https://api.codetabs.com/v1/proxy?quest=',
-        'https://thingproxy.freeboard.io/fetch/'
+        {
+            url: 'https://corsproxy.io/?',
+            type: 'text'
+        },
+        {
+            url: 'https://api.allorigins.win/get?url=',
+            type: 'json'
+        },
+        {
+            url: 'https://api.codetabs.com/v1/proxy?quest=',
+            type: 'text'
+        },
+        {
+            url: 'https://thingproxy.freeboard.io/fetch/',
+            type: 'text'
+        }
     ];
 
     let totalLoaded = 0;
     const errors = [];
-    const maxRetries = 3;
+    const maxRetries = 2; // Reduced retries to speed up
 
     async function fetchWithFallbacks(url) {
         for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
@@ -259,11 +271,11 @@ async function loadObservations() {
             
             for (let retry = 0; retry < maxRetries; retry++) {
                 try {
-                    const proxyUrl = proxy + encodeURIComponent(url);
-                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy);
+                    const proxyUrl = proxy.url + encodeURIComponent(url);
+                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
                     
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
                     
                     const response = await fetch(proxyUrl, {
                         signal: controller.signal,
@@ -276,7 +288,16 @@ async function loadObservations() {
                     clearTimeout(timeoutId);
                     
                     if (response.ok) {
-                        const content = await response.text();
+                        let content;
+                        
+                        // Handle different proxy response formats
+                        if (proxy.type === 'json') {
+                            const data = await response.json();
+                            content = data.contents || data.body;
+                        } else {
+                            content = await response.text();
+                        }
+                        
                         if (content && content.length > 1000) { // Basic validation
                             console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
                             return content;
@@ -291,8 +312,8 @@ async function loadObservations() {
                     console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
                     
                     if (retry < maxRetries - 1) {
-                        // Wait before retrying (exponential backoff)
-                        const delay = Math.pow(2, retry) * 1000;
+                        // Wait before retrying (shorter delays)
+                        const delay = 1000 + (retry * 1000);
                         console.log(`Waiting ${delay}ms before retry...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
                     }
@@ -338,9 +359,9 @@ async function loadObservations() {
             }
         }
 
-        // Respectful delay between requests
-        if (i < sourceUrls.length - 1) { // Don't delay after the last request
-            await new Promise(resolve => setTimeout(resolve, 1500));
+        // Shorter delay between requests
+        if (i < sourceUrls.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 
@@ -427,7 +448,6 @@ function displayObservations() {
                 <div class="popup-location">📍 ${obs.location}</div>
                 ${obs.date ? `<div class="popup-date">📅 ${obs.date}</div>` : ''}
                 ${obs.photographer ? `<div class="popup-date">📷 ${obs.photographer}</div>` : ''}
-               <div class="popup-date">🔗 ${getPageName(obs.sourceUrl)}</div>
             </div>
         `;
 
@@ -530,7 +550,6 @@ function getPageName(url) {
 }
 
 // Initialize the application and AUTO-LOAD data
-// GitHub Pages - Just click the button automatically!
 function autoClickLoadButton() {
     console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON ===');
     
@@ -629,7 +648,7 @@ function refreshMap() {
     loadObservations();
 }
 
-// Simpler debug function
+// Debug function
 function debugGitHub() {
     console.log('=== GITHUB DEBUG ===');
     console.log('Document ready:', document.readyState);
@@ -638,12 +657,6 @@ function debugGitHub() {
     console.log('Map initialized:', typeof map !== 'undefined');
     console.log('Observations:', observations.length);
     console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
-    
-    // Try to find the load button
-    const buttons = document.querySelectorAll('button');
-    buttons.forEach((btn, i) => {
-        console.log(`Button ${i}:`, btn.textContent, btn.getAttribute('onclick'));
-    });
 }
 
 // Run debug after a delay
