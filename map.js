@@ -144,10 +144,8 @@ function extractObservations(htmlContent, sourceUrl) {
             
             
            
-let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+?)<\/a><\/p4>/);
-if (!speciesMatch) {
-    speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
-}
+// Parse species and common name - handle both <p4><i> and <i> formats
+let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
 if (!speciesMatch) {
     speciesMatch = decodedTitle.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
 }
