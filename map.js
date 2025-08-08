@@ -427,7 +427,7 @@ function displayObservations() {
                 <div class="popup-location">📍 ${obs.location}</div>
                 ${obs.date ? `<div class="popup-date">📅 ${obs.date}</div>` : ''}
                 ${obs.photographer ? `<div class="popup-date">📷 ${obs.photographer}</div>` : ''}
-               
+               <div class="popup-date">🔗 ${getPageName(obs.sourceUrl)}</div>
             </div>
         `;
 
