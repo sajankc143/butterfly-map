@@ -3,7 +3,6 @@ let observations = [];
 let markers = [];
 let markerGroup;
 let isLoading = false; // Prevent multiple simultaneous loads
-let isFullscreen = false; // Track fullscreen state
 
 // Source URLs to load automatically
 const sourceUrls = [
@@ -32,218 +31,7 @@ function initMap() {
     if (speciesFilter) {
         speciesFilter.addEventListener('input', filterObservations);
     }
-
-    // Add fullscreen button to map after initialization
-    addFullscreenButton();
 }
-
-// Add fullscreen functionality
-function addFullscreenButton() {
-    // Check if button already exists
-    if (document.getElementById('fullscreenBtn')) {
-        return;
-    }
-
-    // Create fullscreen button
-    const fullscreenBtn = document.createElement('button');
-    fullscreenBtn.id = 'fullscreenBtn';
-    fullscreenBtn.className = 'fullscreen-btn';
-    fullscreenBtn.title = 'Toggle Fullscreen';
-    fullscreenBtn.onclick = toggleFullscreen;
-    
-    fullscreenBtn.innerHTML = `
-        <svg id="fullscreenIcon" viewBox="0 0 24 24">
-            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-        </svg>
-    `;
-
-    // Add styles for the button (in case they're not in CSS)
-    const style = document.createElement('style');
-    style.textContent = `
-        .fullscreen-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 1000;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid rgba(0, 0, 0, 0.2);
-            border-radius: 8px;
-            padding: 10px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .fullscreen-btn:hover {
-            background: rgba(255, 255, 255, 1);
-            transform: scale(1.1);
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
-        }
-
-        .fullscreen-btn svg {
-            width: 20px;
-            height: 20px;
-            fill: #333;
-            transition: fill 0.3s ease;
-        }
-
-        .fullscreen-btn:hover svg {
-            fill: #2196F3;
-        }
-
-        .map-container {
-            position: relative;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .map-container.fullscreen {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            height: 100vh !important;
-            z-index: 9999 !important;
-            border-radius: 0 !important;
-            margin: 0 !important;
-            box-shadow: none !important;
-        }
-
-        .map-container.fullscreen #map {
-            height: 100vh !important;
-            width: 100vw !important;
-            border-radius: 0 !important;
-        }
-
-        body.fullscreen-active {
-            overflow: hidden !important;
-        }
-
-        .map-container.fullscreen .leaflet-control-container .leaflet-top.leaflet-left,
-        .map-container.fullscreen .leaflet-control-container .leaflet-top.leaflet-right {
-            top: 70px;
-        }
-
-        @media (max-width: 768px) {
-            .fullscreen-btn {
-                top: 10px;
-                right: 10px;
-                width: 35px;
-                height: 35px;
-                padding: 8px;
-            }
-
-            .fullscreen-btn svg {
-                width: 18px;
-                height: 18px;
-            }
-
-            .map-container.fullscreen .leaflet-control-container .leaflet-top.leaflet-left,
-            .map-container.fullscreen .leaflet-control-container .leaflet-top.leaflet-right {
-                top: 60px;
-            }
-        }
-    `;
-    
-    // Add styles to head if not already there
-    if (!document.getElementById('fullscreen-styles')) {
-        style.id = 'fullscreen-styles';
-        document.head.appendChild(style);
-    }
-
-    // Find map container and add button
-    let mapContainer = document.querySelector('.map-container');
-    if (!mapContainer) {
-        // Create map container if it doesn't exist
-        const mapDiv = document.getElementById('map');
-        if (mapDiv && mapDiv.parentNode) {
-            mapContainer = document.createElement('div');
-            mapContainer.className = 'map-container';
-            mapDiv.parentNode.insertBefore(mapContainer, mapDiv);
-            mapContainer.appendChild(mapDiv);
-        }
-    }
-
-    if (mapContainer) {
-        mapContainer.appendChild(fullscreenBtn);
-        console.log('Fullscreen button added to map');
-    } else {
-        console.warn('Could not find map container to add fullscreen button');
-    }
-}
-
-// Fullscreen toggle function
-function toggleFullscreen() {
-    const mapContainer = document.querySelector('.map-container');
-    const body = document.body;
-    const fullscreenIcon = document.getElementById('fullscreenIcon');
-    
-    if (!mapContainer) {
-        console.error('Map container not found');
-        return;
-    }
-
-    // Add transition class
-    mapContainer.classList.add('transitioning');
-    
-    if (!isFullscreen) {
-        // Enter fullscreen
-        mapContainer.classList.add('fullscreen');
-        body.classList.add('fullscreen-active');
-        
-        // Change icon to exit fullscreen
-        if (fullscreenIcon) {
-            fullscreenIcon.innerHTML = '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>';
-        }
-        
-        isFullscreen = true;
-        const btn = document.getElementById('fullscreenBtn');
-        if (btn) btn.title = 'Exit Fullscreen';
-        
-        console.log('Entered fullscreen mode');
-        
-    } else {
-        // Exit fullscreen
-        mapContainer.classList.remove('fullscreen');
-        body.classList.remove('fullscreen-active');
-        
-        // Change icon back to enter fullscreen
-        if (fullscreenIcon) {
-            fullscreenIcon.innerHTML = '<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>';
-        }
-        
-        isFullscreen = false;
-        const btn = document.getElementById('fullscreenBtn');
-        if (btn) btn.title = 'Toggle Fullscreen';
-        
-        console.log('Exited fullscreen mode');
-    }
-    
-    // Invalidate map size after transition
-    setTimeout(() => {
-        if (map) {
-            map.invalidateSize();
-            console.log('Map size invalidated after fullscreen toggle');
-        }
-        mapContainer.classList.remove('transitioning');
-    }, 350);
-}
-
-// Handle ESC key to exit fullscreen
-function handleEscapeKey(event) {
-    if (event.key === 'Escape' && isFullscreen) {
-        toggleFullscreen();
-    }
-}
-
-// Add ESC key listener
-document.addEventListener('keydown', handleEscapeKey);
 
 // Updated parseCoordinates function with decimal seconds support
 function parseCoordinates(text) {
@@ -819,16 +607,6 @@ function initializeMapSimple() {
     return true;
 }
 
-// Handle window resize for fullscreen
-function handleWindowResize() {
-    if (map) {
-        setTimeout(() => {
-            map.invalidateSize();
-            console.log('Map size invalidated after window resize');
-        }, 100);
-    }
-}
-
 // Multiple attempts with the simple approach
 console.log('Setting up auto-load for GitHub Pages...');
 
@@ -848,9 +626,6 @@ window.addEventListener('load', () => {
     console.log('Window loaded, attempting auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
-
-// Add window resize listener for fullscreen support
-window.addEventListener('resize', handleWindowResize);
 
 // Backup attempts
 setTimeout(() => {
@@ -883,16 +658,7 @@ function debugGitHub() {
     console.log('Map initialized:', typeof map !== 'undefined');
     console.log('Observations:', observations.length);
     console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
-    console.log('Fullscreen state:', isFullscreen);
-    console.log('Fullscreen button exists:', !!document.getElementById('fullscreenBtn'));
 }
 
 // Run debug after a delay
 setTimeout(debugGitHub, 3000);
-
-// Export functions to global scope for HTML onclick handlers
-window.toggleFullscreen = toggleFullscreen;
-window.loadObservations = loadObservations;
-window.clearMap = clearMap;
-window.refreshMap = refreshMap;
-window.debugGitHub = debugGitHub;
