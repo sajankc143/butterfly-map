@@ -33,6 +33,17 @@ function initMap() {
     }
 }
 
+// Generate cache-busting timestamp
+function getCacheBustingParam() {
+    return `_cb=${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+// Add cache busting to URL
+function addCacheBusting(url) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}${getCacheBustingParam()}`;
+}
+
 // Updated parseCoordinates function with decimal seconds support
 // Enhanced parseCoordinates function with better decimal coordinate support
 function parseCoordinates(text) {
@@ -237,7 +248,7 @@ function extractObservations(htmlContent, sourceUrl) {
     return foundObservations;
 }
 
-// Robust loading function with multiple proxy fallbacks and retry logic
+// Robust loading function with multiple proxy fallbacks and retry logic - CACHE-FREE VERSION
 async function loadObservations() {
     if (isLoading) {
         console.log('Already loading, skipping duplicate request');
@@ -245,40 +256,44 @@ async function loadObservations() {
     }
     
     isLoading = true;
-    console.log('=== ROBUST LOAD OBSERVATIONS STARTED ===');
+    console.log('=== CACHE-FREE ROBUST LOAD OBSERVATIONS STARTED ===');
     
     const loadingDiv = document.getElementById('loading');
     if (loadingDiv) {
         loadingDiv.style.display = 'block';
-        loadingDiv.textContent = 'Starting to load butterfly observations...';
+        loadingDiv.textContent = 'Starting to load butterfly observations (cache-free)...';
     }
     
     observations = [];
     clearMap();
 
-    // Better proxy services with multiple fallbacks
+    // Better proxy services with cache-busting support
     const proxyServices = [
         {
             url: 'https://corsproxy.io/?',
-            type: 'text'
+            type: 'text',
+            supportsCacheBusting: true
         },
         {
             url: 'https://api.allorigins.win/get?url=',
-            type: 'json'
+            type: 'json',
+            supportsCacheBusting: true
         },
         {
             url: 'https://api.codetabs.com/v1/proxy?quest=',
-            type: 'text'
+            type: 'text',
+            supportsCacheBusting: true
         },
         {
             url: 'https://thingproxy.freeboard.io/fetch/',
-            type: 'text'
+            type: 'text',
+            supportsCacheBusting: false // This proxy might not support query params
         }
     ];
 
     let totalLoaded = 0;
     const errors = [];
-    const maxRetries = 2; // Reduced retries to speed up
+    const maxRetries = 2;
 
     async function fetchWithFallbacks(url) {
         for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
@@ -286,18 +301,32 @@ async function loadObservations() {
             
             for (let retry = 0; retry < maxRetries; retry++) {
                 try {
-                    const proxyUrl = proxy.url + encodeURIComponent(url);
-                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
+                    // Add cache busting to the original URL if proxy supports it
+                    let targetUrl = url;
+                    if (proxy.supportsCacheBusting) {
+                        targetUrl = addCacheBusting(url);
+                    }
+                    
+                    const proxyUrl = proxy.url + encodeURIComponent(targetUrl);
+                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1} (cache-free):`, proxy.url);
                     
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+                    const timeoutId = setTimeout(() => controller.abort(), 20000);
                     
+                    // Add cache-busting headers and disable caching completely
                     const response = await fetch(proxyUrl, {
                         signal: controller.signal,
+                        method: 'GET',
                         headers: {
                             'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                        }
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+                            'Pragma': 'no-cache',
+                            'Expires': '0',
+                            'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
+                            'If-None-Match': '*'
+                        },
+                        cache: 'no-store' // Disable fetch API caching
                     });
                     
                     clearTimeout(timeoutId);
@@ -314,7 +343,7 @@ async function loadObservations() {
                         }
                         
                         if (content && content.length > 1000) { // Basic validation
-                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
+                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1} (fresh content)`);
                             return content;
                         } else {
                             throw new Error('Content too short or empty');
@@ -344,10 +373,10 @@ async function loadObservations() {
         const url = sourceUrls[i];
         const pageName = getPageName(url);
         
-        console.log(`\n--- Processing ${i + 1}/${sourceUrls.length}: ${pageName} ---`);
+        console.log(`\n--- Processing ${i + 1}/${sourceUrls.length}: ${pageName} (no cache) ---`);
         
         if (loadingDiv) {
-            loadingDiv.textContent = `Loading ${pageName}... (${i + 1}/${sourceUrls.length})`;
+            loadingDiv.textContent = `Loading ${pageName} (fresh)... (${i + 1}/${sourceUrls.length})`;
         }
         
         try {
@@ -361,7 +390,7 @@ async function loadObservations() {
             
             // Update loading status with progress
             if (loadingDiv) {
-                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} observations found so far...`;
+                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} fresh observations found so far...`;
             }
             
         } catch (error) {
@@ -386,8 +415,8 @@ async function loadObservations() {
     }
 
     // Show results and errors
-    console.log(`\n=== LOADING COMPLETE ===`);
-    console.log(`Successfully loaded: ${totalLoaded} observations`);
+    console.log(`\n=== CACHE-FREE LOADING COMPLETE ===`);
+    console.log(`Successfully loaded: ${totalLoaded} fresh observations`);
     console.log(`Failed pages: ${errors.length}`);
 
     if (errors.length > 0) {
@@ -407,7 +436,7 @@ async function loadObservations() {
         errorDiv.innerHTML = `
             <strong>Some pages couldn't be loaded:</strong><br>
             ${errors.join('<br>')}
-            <br><small>Showing ${totalLoaded} observations from ${sourceUrls.length - errors.length} successful pages.</small>
+            <br><small>Showing ${totalLoaded} fresh observations from ${sourceUrls.length - errors.length} successful pages.</small>
             <button onclick="this.parentElement.remove()" style="position: absolute; top: 5px; right: 10px; background: none; border: none; font-size: 16px; cursor: pointer;">×</button>
         `;
         
@@ -429,7 +458,7 @@ async function loadObservations() {
     
     // If we got some observations, consider it a success
     if (totalLoaded > 0) {
-        console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} observations!`);
+        console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} fresh observations!`);
     } else {
         console.log('⚠️ No observations loaded - all sources may be down');
         
@@ -440,7 +469,7 @@ async function loadObservations() {
                 <div style="color: #856404;">
                     No observations could be loaded from any source. 
                     <button onclick="loadObservations()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                        Try Again
+                        Try Again (No Cache)
                     </button>
                 </div>
             `;
@@ -564,9 +593,41 @@ function getPageName(url) {
     return 'Unknown';
 }
 
-// Initialize the application and AUTO-LOAD data
+// Force clear browser cache function
+function clearBrowserCache() {
+    console.log('=== CLEARING BROWSER CACHE ===');
+    
+    // Clear various browser storage mechanisms
+    try {
+        // Clear localStorage if available
+        if (typeof localStorage !== 'undefined') {
+            localStorage.clear();
+            console.log('✅ localStorage cleared');
+        }
+        
+        // Clear sessionStorage if available
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.clear();
+            console.log('✅ sessionStorage cleared');
+        }
+        
+        // Clear any cached data in memory
+        observations = [];
+        markers = [];
+        
+        console.log('✅ In-memory cache cleared');
+        
+    } catch (error) {
+        console.log('⚠️ Some cache clearing failed:', error.message);
+    }
+}
+
+// Initialize the application and AUTO-LOAD data with cache clearing
 function autoClickLoadButton() {
-    console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON ===');
+    console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON (CACHE-FREE) ===');
+    
+    // Clear cache first
+    clearBrowserCache();
     
     // Find the load button by its onclick attribute
     const buttons = document.querySelectorAll('button');
@@ -588,7 +649,7 @@ function autoClickLoadButton() {
     }
     
     if (loadButton) {
-        console.log('Found load button, clicking it...');
+        console.log('Found load button, clicking it (cache-free)...');
         loadButton.click();
         return true;
     } else {
@@ -597,15 +658,18 @@ function autoClickLoadButton() {
     }
 }
 
-// Simple initialization
+// Simple initialization with cache clearing
 function initializeMapSimple() {
-    console.log('=== SIMPLE GITHUB PAGES INITIALIZATION ===');
+    console.log('=== CACHE-FREE GITHUB PAGES INITIALIZATION ===');
+    
+    // Clear cache first
+    clearBrowserCache();
     
     // Initialize map if not already done
     if (typeof map === 'undefined') {
         const mapDiv = document.getElementById('map');
         if (mapDiv && typeof L !== 'undefined') {
-            console.log('Initializing map...');
+            console.log('Initializing map (cache-free)...');
             initMap();
         } else {
             console.log('Map div or Leaflet not ready, retrying...');
@@ -621,8 +685,11 @@ function initializeMapSimple() {
     return true;
 }
 
-// Multiple attempts with the simple approach
-console.log('Setting up auto-load for GitHub Pages...');
+// Multiple attempts with the cache-free approach
+console.log('Setting up cache-free auto-load for GitHub Pages...');
+
+// Clear cache immediately
+clearBrowserCache();
 
 // Try immediately if document is ready
 if (document.readyState !== 'loading') {
@@ -631,48 +698,100 @@ if (document.readyState !== 'loading') {
 
 // Try after DOM content loaded
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('DOM loaded, attempting auto-load...');
+    console.log('DOM loaded, attempting cache-free auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
 
 // Try after window fully loads
 window.addEventListener('load', () => {
-    console.log('Window loaded, attempting auto-load...');
+    console.log('Window loaded, attempting cache-free auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
 
 // Backup attempts
 setTimeout(() => {
-    console.log('Backup attempt 1 (2s)');
+    console.log('Backup attempt 1 (2s) - cache-free');
     initializeMapSimple();
 }, 2000);
 
 setTimeout(() => {
-    console.log('Backup attempt 2 (4s)');
+    console.log('Backup attempt 2 (4s) - cache-free');
     initializeMapSimple();
 }, 4000);
 
 setTimeout(() => {
-    console.log('Final attempt (7s)');
+    console.log('Final attempt (7s) - cache-free');
     initializeMapSimple();
 }, 7000);
 
-// Manual refresh function for the button
+// Manual refresh function for the button - now cache-free
 function refreshMap() {
-    console.log('Manual refresh triggered');
+    console.log('Manual cache-free refresh triggered');
+    clearBrowserCache();
     loadObservations();
 }
 
-// Debug function
+// Enhanced debug function with cache info
 function debugGitHub() {
-    console.log('=== GITHUB DEBUG ===');
+    console.log('=== CACHE-FREE GITHUB DEBUG ===');
     console.log('Document ready:', document.readyState);
     console.log('Leaflet available:', typeof L !== 'undefined');
     console.log('Map exists:', !!document.getElementById('map'));
     console.log('Map initialized:', typeof map !== 'undefined');
     console.log('Observations:', observations.length);
     console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
+    console.log('Cache-busting timestamp:', getCacheBustingParam());
+    
+    // Test cache-busting URL generation
+    console.log('Sample cache-busted URL:', addCacheBusting('https://example.com/test.html'));
 }
 
 // Run debug after a delay
 setTimeout(debugGitHub, 3000);
+
+// Additional cache-busting utilities
+function forceClearAllCaches() {
+    console.log('=== FORCE CLEARING ALL POSSIBLE CACHES ===');
+    
+    // Clear browser storage
+    clearBrowserCache();
+    
+    // Clear any potential service worker caches
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister();
+                console.log('✅ Service worker unregistered');
+            }
+        }).catch(err => console.log('Service worker clearing failed:', err));
+    }
+    
+    // Clear any potential cache API storage
+    if ('caches' in window) {
+        caches.keys().then(function(names) {
+            for (let name of names) {
+                caches.delete(name);
+                console.log('✅ Cache API storage cleared:', name);
+            }
+        }).catch(err => console.log('Cache API clearing failed:', err));
+    }
+    
+    console.log('✅ All cache clearing attempts completed');
+}
+
+// Expose cache clearing function globally for manual use
+window.forceClearAllCaches = forceClearAllCaches;
+window.refreshMapNow = function() {
+    console.log('=== MANUAL FORCE REFRESH ===');
+    forceClearAllCaches();
+    setTimeout(() => {
+        loadObservations();
+    }, 1000);
+};
+
+console.log('=== CACHE-FREE BUTTERFLY SCRIPT LOADED ===');
+console.log('Available functions:');
+console.log('- window.forceClearAllCaches() - Clear all caches');
+console.log('- window.refreshMapNow() - Force refresh with cache clearing');
+console.log('- refreshMap() - Standard refresh (now cache-free)');
+console.log('Cache-busting active for all requests!');
