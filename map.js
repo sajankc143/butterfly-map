@@ -34,6 +34,7 @@ function initMap() {
 }
 
 // Updated parseCoordinates function with decimal seconds support
+// Enhanced parseCoordinates function with better decimal coordinate support
 function parseCoordinates(text) {
     if (!text) return null;
 
@@ -45,25 +46,32 @@ function parseCoordinates(text) {
         .replace(/&gt;/g, '>')
         .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
-        .replace(/&#176;/g, '°');  // Add this line to decode degree symbols
+        .replace(/&#176;/g, '°');
     
-    // Pattern for coordinates like (36°34'41''N 105°26'26''W, elevation)
-    // UPDATED: Changed [0-9]+ to [0-9]+(?:\.[0-9]+)? for decimal seconds support
+    // Pattern for coordinates - ENHANCED with decimal coordinate support
     const coordPatterns = [
-        // Most flexible pattern - handles various spacing AND DECIMAL SECONDS
+        // DMS format with decimal seconds support
         /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
-        // Standard format with space: (36°34'41.1''N 105°26'26.5''W, 10227 ft.)
         /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
-        // Without parentheses but with space: 36°34'41.1''N 105°26'26.5''W
         /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
-        // Without parentheses, no space: 36°34'41.1''N105°26'26.5''W
         /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
-        // With various spacing and commas
         /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
-        // Decimal degrees in parentheses
+        
+        // Decimal degrees with direction indicators
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
-        // Simple decimal pattern
-        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/
+        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+        
+        // NEW: Plain decimal coordinates (latitude, longitude) - handles negative numbers
+        /\(?(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)?/,
+        
+        // NEW: Decimal coordinates with parentheses
+        /\((-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)/,
+        
+        // NEW: Space-separated decimal coordinates
+        /(-?[0-9]+\.[0-9]+)\s+(-?[0-9]+\.[0-9]+)/,
+        
+        // Fallback: any two decimal numbers that could be coordinates
+        /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/
     ];
 
     for (let pattern of coordPatterns) {
@@ -75,12 +83,12 @@ function parseCoordinates(text) {
                 // DMS format with decimal seconds support
                 const latDeg = parseInt(match[1]);
                 const latMin = parseInt(match[2]);
-                const latSec = parseFloat(match[3]); // CHANGED: parseFloat instead of parseInt
+                const latSec = parseFloat(match[3]);
                 const latDir = match[4];
                 
                 const lonDeg = parseInt(match[5]);
                 const lonMin = parseInt(match[6]);
-                const lonSec = parseFloat(match[7]); // CHANGED: parseFloat instead of parseInt
+                const lonSec = parseFloat(match[7]);
                 const lonDir = match[8];
 
                 let lat = latDeg + latMin/60 + latSec/3600;
@@ -89,10 +97,10 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
-                console.log('Parsed coordinates:', [lat, lon]); // Debug log
+                console.log('Parsed DMS coordinates:', [lat, lon]);
                 return [lat, lon];
             } else if (match.length >= 4) {
-                // Decimal format
+                // Decimal format with direction indicators
                 let lat = parseFloat(match[1]);
                 const latDir = match[2];
                 let lon = parseFloat(match[3]);
@@ -101,27 +109,33 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
-                console.log('Parsed decimal coordinates:', [lat, lon]); // Debug log
+                console.log('Parsed decimal coordinates with directions:', [lat, lon]);
                 return [lat, lon];
+            } else if (match.length >= 3) {
+                // Plain decimal coordinates (new patterns)
+                const lat = parseFloat(match[1]);
+                const lon = parseFloat(match[2]);
+                
+                // Validate coordinate ranges
+                if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+                    console.log('Parsed plain decimal coordinates:', [lat, lon]);
+                    return [lat, lon];
+                }
             }
         }
     }
 
-    // Try to find any numbers that look like coordinates
-    const numberPattern = /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/;
-    const numberMatch = decodedText.match(numberPattern);
-    if (numberMatch) {
-        const lat = parseFloat(numberMatch[1]);
-        const lon = parseFloat(numberMatch[2]);
-        if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-            console.log('Fallback coordinate parsing:', [lat, lon]); // Debug log
-            return [lat, lon];
-        }
-    }
-
-    console.log('No coordinates found in:', decodedText.substring(0, 200)); // Debug log
+    console.log('No coordinates found in:', decodedText.substring(0, 200));
     return null;
 }
+
+// Test the function with various coordinate formats
+console.log('Testing coordinate parsing:');
+console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
+console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
+console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
+console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
+console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
 
 // Extract observation data from HTML content
 function extractObservations(htmlContent, sourceUrl) {
@@ -647,60 +661,6 @@ setTimeout(() => {
 function refreshMap() {
     console.log('Manual refresh triggered');
     loadObservations();
-}
-// Add this debug function and run it in Safari console
-function debugSafariIssues() {
-    console.log('=== SAFARI DEBUG REPORT ===');
-    console.log('User Agent:', navigator.userAgent);
-    console.log('Current observations count:', observations.length);
-    console.log('Is loading:', isLoading);
-    console.log('Map initialized:', typeof map !== 'undefined');
-    console.log('Marker group exists:', !!markerGroup);
-    
-    // Check if markers are actually on the map
-    if (markerGroup) {
-        const layerCount = markerGroup.getLayers().length;
-        console.log('Markers on map:', layerCount);
-        
-        if (layerCount === 0 && observations.length > 0) {
-            console.log('⚠️ ISSUE: Have observations but no markers displayed!');
-            console.log('First few observations:', observations.slice(0, 3));
-        }
-    }
-    
-    // Check local storage or cached data
-    console.log('Local storage items:', Object.keys(localStorage));
-    
-    // Check if coordinate parsing is working
-    const testCoord = parseCoordinates('(33.4136, -105.7013)');
-    console.log('Test coordinate parsing:', testCoord);
-    
-    // Check DOM state
-    const mapDiv = document.getElementById('map');
-    console.log('Map div exists:', !!mapDiv);
-    console.log('Map div dimensions:', mapDiv ? `${mapDiv.offsetWidth}x${mapDiv.offsetHeight}` : 'N/A');
-    
-    // Check for any JavaScript errors
-    console.log('=== Try loading one observation manually ===');
-    if (observations.length > 0) {
-        const obs = observations[0];
-        console.log('First observation:', obs);
-        
-        try {
-            const marker = L.marker(obs.coordinates);
-            console.log('Created marker successfully:', marker);
-            marker.addTo(markerGroup);
-            console.log('Added marker to group');
-        } catch (error) {
-            console.log('❌ Error creating marker:', error);
-        }
-    }
-    
-    return {
-        observationsCount: observations.length,
-        markersCount: markerGroup ? markerGroup.getLayers().length : 0,
-        isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
-    };
 }
 
 // Debug function
