@@ -648,6 +648,60 @@ function refreshMap() {
     console.log('Manual refresh triggered');
     loadObservations();
 }
+// Add this debug function and run it in Safari console
+function debugSafariIssues() {
+    console.log('=== SAFARI DEBUG REPORT ===');
+    console.log('User Agent:', navigator.userAgent);
+    console.log('Current observations count:', observations.length);
+    console.log('Is loading:', isLoading);
+    console.log('Map initialized:', typeof map !== 'undefined');
+    console.log('Marker group exists:', !!markerGroup);
+    
+    // Check if markers are actually on the map
+    if (markerGroup) {
+        const layerCount = markerGroup.getLayers().length;
+        console.log('Markers on map:', layerCount);
+        
+        if (layerCount === 0 && observations.length > 0) {
+            console.log('⚠️ ISSUE: Have observations but no markers displayed!');
+            console.log('First few observations:', observations.slice(0, 3));
+        }
+    }
+    
+    // Check local storage or cached data
+    console.log('Local storage items:', Object.keys(localStorage));
+    
+    // Check if coordinate parsing is working
+    const testCoord = parseCoordinates('(33.4136, -105.7013)');
+    console.log('Test coordinate parsing:', testCoord);
+    
+    // Check DOM state
+    const mapDiv = document.getElementById('map');
+    console.log('Map div exists:', !!mapDiv);
+    console.log('Map div dimensions:', mapDiv ? `${mapDiv.offsetWidth}x${mapDiv.offsetHeight}` : 'N/A');
+    
+    // Check for any JavaScript errors
+    console.log('=== Try loading one observation manually ===');
+    if (observations.length > 0) {
+        const obs = observations[0];
+        console.log('First observation:', obs);
+        
+        try {
+            const marker = L.marker(obs.coordinates);
+            console.log('Created marker successfully:', marker);
+            marker.addTo(markerGroup);
+            console.log('Added marker to group');
+        } catch (error) {
+            console.log('❌ Error creating marker:', error);
+        }
+    }
+    
+    return {
+        observationsCount: observations.length,
+        markersCount: markerGroup ? markerGroup.getLayers().length : 0,
+        isSafari: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent)
+    };
+}
 
 // Debug function
 function debugGitHub() {
