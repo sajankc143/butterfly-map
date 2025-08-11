@@ -33,15 +33,8 @@ function initMap() {
     }
 }
 
-// Cache-busting utility function
-function addCacheBuster(url) {
-    const timestamp = Date.now();
-    const randomValue = Math.floor(Math.random() * 10000);
-    const separator = url.includes('?') ? '&' : '?';
-    return `${url}${separator}_t=${timestamp}&_r=${randomValue}`;
-}
-
 // Updated parseCoordinates function with decimal seconds support
+// Enhanced parseCoordinates function with better decimal coordinate support
 function parseCoordinates(text) {
     if (!text) return null;
 
@@ -135,6 +128,14 @@ function parseCoordinates(text) {
     console.log('No coordinates found in:', decodedText.substring(0, 200));
     return null;
 }
+
+// Test the function with various coordinate formats
+console.log('Testing coordinate parsing:');
+console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
+console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
+console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
+console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
+console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
 
 // Extract observation data from HTML content
 function extractObservations(htmlContent, sourceUrl) {
@@ -236,7 +237,7 @@ function extractObservations(htmlContent, sourceUrl) {
     return foundObservations;
 }
 
-// FIXED: Robust loading function with cache-busting and Safari-specific fixes
+// Robust loading function with multiple proxy fallbacks and retry logic
 async function loadObservations() {
     if (isLoading) {
         console.log('Already loading, skipping duplicate request');
@@ -244,7 +245,7 @@ async function loadObservations() {
     }
     
     isLoading = true;
-    console.log('=== ROBUST LOAD OBSERVATIONS STARTED (WITH CACHE BUSTING) ===');
+    console.log('=== ROBUST LOAD OBSERVATIONS STARTED ===');
     
     const loadingDiv = document.getElementById('loading');
     if (loadingDiv) {
@@ -277,43 +278,26 @@ async function loadObservations() {
 
     let totalLoaded = 0;
     const errors = [];
-    const maxRetries = 2;
+    const maxRetries = 2; // Reduced retries to speed up
 
     async function fetchWithFallbacks(url) {
-        // CACHE BUSTING: Add timestamp and random value to original URL
-        const cacheBustedUrl = addCacheBuster(url);
-        console.log(`Cache-busted URL: ${cacheBustedUrl}`);
-        
         for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
             const proxy = proxyServices[proxyIndex];
             
             for (let retry = 0; retry < maxRetries; retry++) {
                 try {
-                    const proxyUrl = proxy.url + encodeURIComponent(cacheBustedUrl);
+                    const proxyUrl = proxy.url + encodeURIComponent(url);
                     console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
                     
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 25000); // Increased timeout for Safari
+                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
                     
-                    // SAFARI-SPECIFIC FIXES: Enhanced headers and request options
                     const response = await fetch(proxyUrl, {
-                        method: 'GET',
                         signal: controller.signal,
-                        cache: 'no-cache', // Force no cache
                         headers: {
-                            'Cache-Control': 'no-cache, no-store, must-revalidate',
-                            'Pragma': 'no-cache',
-                            'Expires': '0',
-                            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                            'Accept-Language': 'en-US,en;q=0.5',
-                            'Accept-Encoding': 'gzip, deflate',
-                            'DNT': '1',
-                            'Connection': 'keep-alive',
-                            'Upgrade-Insecure-Requests': '1'
-                        },
-                        credentials: 'omit', // Don't send credentials
-                        mode: 'cors'
+                            'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                        }
                     });
                     
                     clearTimeout(timeoutId);
@@ -343,8 +327,8 @@ async function loadObservations() {
                     console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
                     
                     if (retry < maxRetries - 1) {
-                        // Longer delays for Safari
-                        const delay = 2000 + (retry * 2000);
+                        // Wait before retrying (shorter delays)
+                        const delay = 1000 + (retry * 1000);
                         console.log(`Waiting ${delay}ms before retry...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
                     }
@@ -390,9 +374,9 @@ async function loadObservations() {
             }
         }
 
-        // Longer delay between requests for Safari
+        // Shorter delay between requests
         if (i < sourceUrls.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 
@@ -580,45 +564,6 @@ function getPageName(url) {
     return 'Unknown';
 }
 
-// ADDED: Force clear browser cache function
-function clearBrowserCache() {
-    console.log('=== CLEARING BROWSER CACHE ===');
-    
-    // Clear any cached data in the script
-    observations = [];
-    clearMap();
-    
-    // Try to clear service worker cache if available
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-                registration.unregister();
-            }
-        });
-    }
-    
-    // Clear any local storage items (though your script doesn't use localStorage)
-    if (typeof Storage !== "undefined") {
-        try {
-            localStorage.clear();
-            sessionStorage.clear();
-        } catch (e) {
-            console.log('Could not clear storage:', e);
-        }
-    }
-    
-    console.log('Cache clearing attempted. Manual reload may still be required.');
-}
-
-// ENHANCED: Manual refresh function with cache clearing
-function refreshMap() {
-    console.log('Manual refresh triggered with cache clearing');
-    clearBrowserCache();
-    setTimeout(() => {
-        loadObservations();
-    }, 1000);
-}
-
 // Initialize the application and AUTO-LOAD data
 function autoClickLoadButton() {
     console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON ===');
@@ -712,17 +657,21 @@ setTimeout(() => {
     initializeMapSimple();
 }, 7000);
 
-// Debug function with Safari-specific checks
+// Manual refresh function for the button
+function refreshMap() {
+    console.log('Manual refresh triggered');
+    loadObservations();
+}
+
+// Debug function
 function debugGitHub() {
-    console.log('=== GITHUB DEBUG (Safari Enhanced) ===');
-    console.log('Browser:', navigator.userAgent);
+    console.log('=== GITHUB DEBUG ===');
     console.log('Document ready:', document.readyState);
     console.log('Leaflet available:', typeof L !== 'undefined');
     console.log('Map exists:', !!document.getElementById('map'));
     console.log('Map initialized:', typeof map !== 'undefined');
     console.log('Observations:', observations.length);
     console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
-    console.log('Current time:', new Date().toISOString());
 }
 
 // Run debug after a delay
