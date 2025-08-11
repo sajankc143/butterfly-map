@@ -33,27 +33,23 @@ function initMap() {
     }
 }
 
-// Generate EXTREMELY aggressive cache-busting parameters
-function getSuperCacheBustingParam() {
-    const timestamp = Date.now();
-    const random1 = Math.random().toString(36).substr(2, 15);
-    const random2 = Math.random().toString(36).substr(2, 15);
-    const microseconds = performance.now().toString().replace('.', '');
-    return `nocache=${timestamp}&bust=${random1}&fresh=${random2}&time=${microseconds}&v=${Math.floor(Math.random() * 999999)}`;
+// Generate cache-busting timestamp
+function getCacheBustingParam() {
+    return `_cb=${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-// Add MULTIPLE cache busting parameters to URL
-function addAggressiveCacheBusting(url) {
+// Add cache busting to URL
+function addCacheBusting(url) {
     const separator = url.includes('?') ? '&' : '?';
-    const cacheBust = getSuperCacheBustingParam();
-    return `${url}${separator}${cacheBust}&_t=${Date.now()}&_r=${Math.random()}`;
+    return `${url}${separator}${getCacheBustingParam()}`;
 }
 
-// Enhanced parseCoordinates function
+// Updated parseCoordinates function with decimal seconds support
+// Enhanced parseCoordinates function with better decimal coordinate support
 function parseCoordinates(text) {
     if (!text) return null;
 
-    console.log('Parsing coordinates from:', text.substring(0, 100) + '...');
+    console.log('Parsing coordinates from:', text.substring(0, 100) + '...'); // Debug log
 
     // Decode HTML entities first - including degree symbol
     const decodedText = text
@@ -76,13 +72,13 @@ function parseCoordinates(text) {
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
         /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
         
-        // Plain decimal coordinates (latitude, longitude) - handles negative numbers
+        // NEW: Plain decimal coordinates (latitude, longitude) - handles negative numbers
         /\(?(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)?/,
         
-        // Decimal coordinates with parentheses
+        // NEW: Decimal coordinates with parentheses
         /\((-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)/,
         
-        // Space-separated decimal coordinates
+        // NEW: Space-separated decimal coordinates
         /(-?[0-9]+\.[0-9]+)\s+(-?[0-9]+\.[0-9]+)/,
         
         // Fallback: any two decimal numbers that could be coordinates
@@ -92,7 +88,7 @@ function parseCoordinates(text) {
     for (let pattern of coordPatterns) {
         const match = decodedText.match(pattern);
         if (match) {
-            console.log('Coordinate match found:', match);
+            console.log('Coordinate match found:', match); // Debug log
             
             if (match.length >= 8) {
                 // DMS format with decimal seconds support
@@ -144,6 +140,14 @@ function parseCoordinates(text) {
     return null;
 }
 
+// Test the function with various coordinate formats
+console.log('Testing coordinate parsing:');
+console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
+console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
+console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
+console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
+console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
+
 // Extract observation data from HTML content
 function extractObservations(htmlContent, sourceUrl) {
     const parser = new DOMParser();
@@ -159,7 +163,7 @@ function extractObservations(htmlContent, sourceUrl) {
         const img = link.querySelector('img');
         
         if (dataTitle && img) {
-            console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...');
+            console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...'); // Debug log
             
             // Decode HTML entities in data-title
             const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
@@ -244,7 +248,7 @@ function extractObservations(htmlContent, sourceUrl) {
     return foundObservations;
 }
 
-// SUPER AGGRESSIVE NO-CACHE loading function
+// Robust loading function with multiple proxy fallbacks and retry logic - CACHE-FREE VERSION
 async function loadObservations() {
     if (isLoading) {
         console.log('Already loading, skipping duplicate request');
@@ -252,168 +256,156 @@ async function loadObservations() {
     }
     
     isLoading = true;
-    console.log('=== SUPER AGGRESSIVE NO-CACHE LOAD STARTED ===');
-    console.log('Using timestamp:', Date.now());
+    console.log('=== CACHE-FREE ROBUST LOAD OBSERVATIONS STARTED ===');
     
     const loadingDiv = document.getElementById('loading');
     if (loadingDiv) {
         loadingDiv.style.display = 'block';
-        loadingDiv.textContent = `🔄 FORCE REFRESHING - Bypassing ALL caches... (${new Date().toLocaleTimeString()})`;
+        loadingDiv.textContent = 'Starting to load butterfly observations (cache-free)...';
     }
     
     observations = [];
     clearMap();
 
-    // SUPER AGGRESSIVE proxy rotation with cache-busting
+    // Better proxy services with cache-busting support
     const proxyServices = [
-        // Use different proxy for each attempt to avoid proxy-level caching
-        {
-            url: 'https://api.allorigins.win/raw?url=',
-            type: 'text',
-            name: 'AllOrigins-Raw'
-        },
         {
             url: 'https://corsproxy.io/?',
             type: 'text',
-            name: 'CorsProxy'
+            supportsCacheBusting: true
         },
         {
-            url: 'https://api.codetabs.com/v1/proxy/?quest=',
-            type: 'text',
-            name: 'CodeTabs'
+            url: 'https://api.allorigins.win/get?url=',
+            type: 'json',
+            supportsCacheBusting: true
         },
         {
-            url: 'https://proxy.cors.sh/',
+            url: 'https://api.codetabs.com/v1/proxy?quest=',
             type: 'text',
-            name: 'CorsShield'
+            supportsCacheBusting: true
         },
         {
             url: 'https://thingproxy.freeboard.io/fetch/',
             type: 'text',
-            name: 'ThingProxy'
+            supportsCacheBusting: false // This proxy might not support query params
         }
     ];
 
     let totalLoaded = 0;
     const errors = [];
+    const maxRetries = 2;
 
-    async function fetchWithSuperAggressiveCacheBusting(url, attempt = 1) {
-        const maxAttempts = 3;
-        
+    async function fetchWithFallbacks(url) {
         for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
             const proxy = proxyServices[proxyIndex];
             
-            try {
-                // SUPER aggressive cache busting - different params each time
-                const superCachedUrl = addAggressiveCacheBusting(url);
-                const proxyUrl = proxy.url + encodeURIComponent(superCachedUrl);
-                
-                console.log(`🚀 ATTEMPT ${attempt}: ${proxy.name} with SUPER cache-bust`);
-                console.log(`   URL: ${superCachedUrl.substring(0, 100)}...`);
-                
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 15000);
-                
-                // MAXIMUM cache-busting headers
-                const response = await fetch(proxyUrl, {
-                    signal: controller.signal,
-                    method: 'GET',
-                    headers: {
-                        'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0, private',
-                        'Pragma': 'no-cache',
-                        'Expires': '0',
-                        'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
-                        'If-None-Match': '*',
-                        'User-Agent': `ButterflyBot-${Date.now()}-${Math.random()}`,
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Encoding': 'identity', // Disable compression to avoid cache
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'X-Cache-Bypass': Date.now().toString(),
-                        'X-Force-Fresh': 'true'
-                    },
-                    cache: 'no-store',
-                    mode: 'cors'
-                });
-                
-                clearTimeout(timeoutId);
-                
-                if (response.ok) {
-                    let content = await response.text();
+            for (let retry = 0; retry < maxRetries; retry++) {
+                try {
+                    // Add cache busting to the original URL if proxy supports it
+                    let targetUrl = url;
+                    if (proxy.supportsCacheBusting) {
+                        targetUrl = addCacheBusting(url);
+                    }
                     
-                    // Additional validation - check for real content
-                    if (content && content.length > 1000 && content.includes('data-title')) {
-                        console.log(`✅ SUCCESS: ${proxy.name} returned ${content.length} chars`);
+                    const proxyUrl = proxy.url + encodeURIComponent(targetUrl);
+                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1} (cache-free):`, proxy.url);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 20000);
+                    
+                    // Add cache-busting headers and disable caching completely
+                    const response = await fetch(proxyUrl, {
+                        signal: controller.signal,
+                        method: 'GET',
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                            'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+                            'Pragma': 'no-cache',
+                            'Expires': '0',
+                            'If-Modified-Since': 'Thu, 01 Jan 1970 00:00:00 GMT',
+                            'If-None-Match': '*'
+                        },
+                        cache: 'no-store' // Disable fetch API caching
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        let content;
                         
-                        // Double-check we got fresh content by looking for recent dates
-                        const currentYear = new Date().getFullYear();
-                        const hasRecentContent = content.includes(currentYear.toString()) || 
-                                               content.includes((currentYear-1).toString());
-                        
-                        if (hasRecentContent) {
-                            console.log(`✅ Content appears FRESH (contains ${currentYear})`);
+                        // Handle different proxy response formats
+                        if (proxy.type === 'json') {
+                            const data = await response.json();
+                            content = data.contents || data.body;
                         } else {
-                            console.log(`⚠️ Content may be stale (no ${currentYear} found)`);
+                            content = await response.text();
                         }
                         
-                        return content;
+                        if (content && content.length > 1000) { // Basic validation
+                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1} (fresh content)`);
+                            return content;
+                        } else {
+                            throw new Error('Content too short or empty');
+                        }
                     } else {
-                        throw new Error(`Invalid content: ${content ? content.length : 0} chars, has data-title: ${content ? content.includes('data-title') : false}`);
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                     }
-                } else {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-            } catch (error) {
-                console.log(`❌ ${proxy.name} failed:`, error.message);
-                
-                // If this was the last proxy and we haven't reached max attempts, try again
-                if (proxyIndex === proxyServices.length - 1 && attempt < maxAttempts) {
-                    console.log(`🔄 Retrying attempt ${attempt + 1} after 2 seconds...`);
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-                    return fetchWithSuperAggressiveCacheBusting(url, attempt + 1);
+                    
+                } catch (error) {
+                    console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
+                    
+                    if (retry < maxRetries - 1) {
+                        // Wait before retrying (shorter delays)
+                        const delay = 1000 + (retry * 1000);
+                        console.log(`Waiting ${delay}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
                 }
             }
         }
         
-        throw new Error(`ALL proxies failed after ${maxAttempts} attempts`);
+        throw new Error('All proxies and retries failed');
     }
 
-    // Process each URL with SUPER aggressive fetching
+    // Process each URL with robust fetching
     for (let i = 0; i < sourceUrls.length; i++) {
         const url = sourceUrls[i];
         const pageName = getPageName(url);
         
-        console.log(`\n🔥 SUPER REFRESH ${i + 1}/${sourceUrls.length}: ${pageName}`);
+        console.log(`\n--- Processing ${i + 1}/${sourceUrls.length}: ${pageName} (no cache) ---`);
         
         if (loadingDiv) {
-            loadingDiv.textContent = `🔄 FORCE LOADING ${pageName}... (${i + 1}/${sourceUrls.length}) - ${new Date().toLocaleTimeString()}`;
+            loadingDiv.textContent = `Loading ${pageName} (fresh)... (${i + 1}/${sourceUrls.length})`;
         }
         
         try {
-            const htmlContent = await fetchWithSuperAggressiveCacheBusting(url);
+            const htmlContent = await fetchWithFallbacks(url);
             const siteObservations = extractObservations(htmlContent, url);
             
             observations.push(...siteObservations);
             totalLoaded += siteObservations.length;
             
-            console.log(`✅ ${pageName}: ${siteObservations.length} FRESH observations (Total: ${totalLoaded})`);
+            console.log(`✅ ${pageName}: ${siteObservations.length} observations (Total: ${totalLoaded})`);
             
+            // Update loading status with progress
             if (loadingDiv) {
-                loadingDiv.textContent = `✅ ${pageName} loaded - ${totalLoaded} FRESH observations so far...`;
+                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} fresh observations found so far...`;
             }
             
         } catch (error) {
-            console.error(`💥 COMPLETE FAILURE for ${pageName}:`, error.message);
+            console.error(`❌ Failed to load ${pageName}:`, error.message);
             errors.push(`${pageName}: ${error.message}`);
             
+            // Continue with other URLs even if one fails
             if (loadingDiv) {
-                loadingDiv.textContent = `❌ ${pageName} failed, trying others...`;
+                loadingDiv.textContent = `Failed to load ${pageName}, continuing with others...`;
             }
         }
 
-        // Brief pause between requests
+        // Shorter delay between requests
         if (i < sourceUrls.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 
@@ -422,31 +414,30 @@ async function loadObservations() {
         loadingDiv.style.display = 'none';
     }
 
-    // Show results
-    console.log(`\n🎉 SUPER AGGRESSIVE LOADING COMPLETE 🎉`);
-    console.log(`✅ Successfully loaded: ${totalLoaded} GUARANTEED FRESH observations`);
-    console.log(`❌ Failed pages: ${errors.length}`);
-    console.log(`📅 Load completed at: ${new Date().toLocaleString()}`);
+    // Show results and errors
+    console.log(`\n=== CACHE-FREE LOADING COMPLETE ===`);
+    console.log(`Successfully loaded: ${totalLoaded} fresh observations`);
+    console.log(`Failed pages: ${errors.length}`);
 
     if (errors.length > 0) {
-        console.log('❌ Errors:', errors);
+        console.log('Errors:', errors);
         
+        // Show error notification but don't block the UI
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
-            background: #f8d7da; 
-            border: 1px solid #f5c6cb; 
-            color: #721c24; 
-            padding: 15px; 
+            background: #fff3cd; 
+            border: 1px solid #ffeaa7; 
+            color: #856404; 
+            padding: 10px; 
             margin: 10px 0; 
             border-radius: 4px;
             position: relative;
         `;
         errorDiv.innerHTML = `
-            <strong>⚠️ Some pages couldn't be loaded with cache-busting:</strong><br>
+            <strong>Some pages couldn't be loaded:</strong><br>
             ${errors.join('<br>')}
-            <br><small>✅ Showing ${totalLoaded} FRESH observations from ${sourceUrls.length - errors.length} successful pages.</small>
-            <br><small>🕒 Loaded at: ${new Date().toLocaleString()}</small>
-            <button onclick="this.parentElement.remove()" style="position: absolute; top: 10px; right: 15px; background: none; border: none; font-size: 18px; cursor: pointer; color: #721c24;">×</button>
+            <br><small>Showing ${totalLoaded} fresh observations from ${sourceUrls.length - errors.length} successful pages.</small>
+            <button onclick="this.parentElement.remove()" style="position: absolute; top: 5px; right: 10px; background: none; border: none; font-size: 16px; cursor: pointer;">×</button>
         `;
         
         const container = document.querySelector('.container');
@@ -454,60 +445,31 @@ async function loadObservations() {
             container.insertBefore(errorDiv, document.getElementById('map'));
         }
         
+        // Auto-remove after 15 seconds
         setTimeout(() => {
             if (errorDiv.parentElement) {
                 errorDiv.remove();
             }
-        }, 20000);
+        }, 15000);
     }
 
     displayObservations();
     isLoading = false;
     
+    // If we got some observations, consider it a success
     if (totalLoaded > 0) {
-        console.log(`🎊 SUCCESS: Butterfly map loaded with ${totalLoaded} GUARANTEED FRESH observations!`);
-        
-        // Show success notification
-        const successDiv = document.createElement('div');
-        successDiv.style.cssText = `
-            background: #d4edda; 
-            border: 1px solid #c3e6cb; 
-            color: #155724; 
-            padding: 10px; 
-            margin: 10px 0; 
-            border-radius: 4px;
-            text-align: center;
-        `;
-        successDiv.innerHTML = `
-            ✅ <strong>SUCCESS!</strong> Loaded ${totalLoaded} fresh observations at ${new Date().toLocaleTimeString()}
-            <button onclick="this.parentElement.remove()" style="margin-left: 10px; background: none; border: none; font-size: 16px; cursor: pointer;">×</button>
-        `;
-        
-        const container = document.querySelector('.container');
-        if (container) {
-            container.insertBefore(successDiv, document.getElementById('map'));
-        }
-        
-        setTimeout(() => {
-            if (successDiv.parentElement) {
-                successDiv.remove();
-            }
-        }, 10000);
-        
+        console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} fresh observations!`);
     } else {
-        console.log('💀 TOTAL FAILURE: No observations loaded - all sources completely inaccessible');
+        console.log('⚠️ No observations loaded - all sources may be down');
         
+        // Show retry option
         if (loadingDiv) {
             loadingDiv.style.display = 'block';
             loadingDiv.innerHTML = `
-                <div style="color: #721c24; text-align: center; padding: 20px;">
-                    💀 <strong>COMPLETE FAILURE</strong> - No observations could be loaded from any source.<br>
-                    All cache-busting attempts failed.<br><br>
-                    <button onclick="window.location.reload()" style="padding: 10px 20px; background: #dc3545; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
-                        🔄 Hard Reload Page
-                    </button>
-                    <button onclick="loadObservations()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px;">
-                        🚀 Try Super Refresh Again
+                <div style="color: #856404;">
+                    No observations could be loaded from any source. 
+                    <button onclick="loadObservations()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                        Try Again (No Cache)
                     </button>
                 </div>
             `;
@@ -631,71 +593,43 @@ function getPageName(url) {
     return 'Unknown';
 }
 
-// NUCLEAR CACHE CLEARING - Clear absolutely everything
-function nuclearCacheClear() {
-    console.log('☢️ NUCLEAR CACHE CLEARING INITIATED ☢️');
+// Force clear browser cache function
+function clearBrowserCache() {
+    console.log('=== CLEARING BROWSER CACHE ===');
     
+    // Clear various browser storage mechanisms
     try {
-        // Clear all browser storage
+        // Clear localStorage if available
         if (typeof localStorage !== 'undefined') {
             localStorage.clear();
-            console.log('☢️ localStorage nuked');
+            console.log('✅ localStorage cleared');
         }
         
+        // Clear sessionStorage if available
         if (typeof sessionStorage !== 'undefined') {
             sessionStorage.clear();
-            console.log('☢️ sessionStorage nuked');
+            console.log('✅ sessionStorage cleared');
         }
         
-        // Clear IndexedDB
-        if ('indexedDB' in window) {
-            indexedDB.databases().then(databases => {
-                databases.forEach(db => {
-                    indexedDB.deleteDatabase(db.name);
-                    console.log('☢️ IndexedDB nuked:', db.name);
-                });
-            }).catch(err => console.log('IndexedDB clearing failed:', err));
-        }
-        
-        // Clear service workers
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations().then(registrations => {
-                registrations.forEach(registration => {
-                    registration.unregister();
-                    console.log('☢️ Service worker nuked');
-                });
-            }).catch(err => console.log('Service worker clearing failed:', err));
-        }
-        
-        // Clear Cache API
-        if ('caches' in window) {
-            caches.keys().then(names => {
-                names.forEach(name => {
-                    caches.delete(name);
-                    console.log('☢️ Cache API nuked:', name);
-                });
-            }).catch(err => console.log('Cache API clearing failed:', err));
-        }
-        
-        // Clear in-memory data
+        // Clear any cached data in memory
         observations = [];
         markers = [];
         
-        console.log('☢️ NUCLEAR CACHE CLEARING COMPLETE ☢️');
+        console.log('✅ In-memory cache cleared');
         
     } catch (error) {
-        console.log('☢️ Nuclear clearing encountered resistance:', error.message);
+        console.log('⚠️ Some cache clearing failed:', error.message);
     }
 }
 
-// Auto-load functionality with nuclear cache clearing
+// Initialize the application and AUTO-LOAD data with cache clearing
 function autoClickLoadButton() {
-    console.log('🚀 AUTO-LOAD WITH NUCLEAR CACHE CLEARING 🚀');
+    console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON (CACHE-FREE) ===');
     
-    // Nuclear clear first
-    nuclearCacheClear();
+    // Clear cache first
+    clearBrowserCache();
     
-    // Find and click load button
+    // Find the load button by its onclick attribute
     const buttons = document.querySelectorAll('button');
     let loadButton = null;
     
@@ -715,30 +649,30 @@ function autoClickLoadButton() {
     }
     
     if (loadButton) {
-        console.log('🚀 Found load button, executing NUCLEAR REFRESH...');
+        console.log('Found load button, clicking it (cache-free)...');
         loadButton.click();
         return true;
     } else {
-        console.log('❌ Load button not found');
+        console.log('Load button not found');
         return false;
     }
 }
 
-// Simple initialization with nuclear cache clearing
+// Simple initialization with cache clearing
 function initializeMapSimple() {
-    console.log('🚀 NUCLEAR GITHUB PAGES INITIALIZATION 🚀');
+    console.log('=== CACHE-FREE GITHUB PAGES INITIALIZATION ===');
     
-    // Nuclear clear first
-    nuclearCacheClear();
+    // Clear cache first
+    clearBrowserCache();
     
     // Initialize map if not already done
     if (typeof map === 'undefined') {
         const mapDiv = document.getElementById('map');
         if (mapDiv && typeof L !== 'undefined') {
-            console.log('🗺️ Initializing map (post-nuclear)...');
+            console.log('Initializing map (cache-free)...');
             initMap();
         } else {
-            console.log('⏳ Map div or Leaflet not ready, retrying...');
+            console.log('Map div or Leaflet not ready, retrying...');
             return false;
         }
     }
@@ -751,148 +685,62 @@ function initializeMapSimple() {
     return true;
 }
 
-// SUPER AGGRESSIVE initialization attempts
-console.log('🚀 SETTING UP NUCLEAR AUTO-LOAD FOR GITHUB PAGES 🚀');
+// Multiple attempts with the cache-free approach
+console.log('Setting up cache-free auto-load for GitHub Pages...');
 
-// Immediate nuclear clear
-nuclearCacheClear();
+// Clear cache immediately
+clearBrowserCache();
 
 // Try immediately if document is ready
 if (document.readyState !== 'loading') {
-    setTimeout(() => {
-        console.log('🚀 Immediate attempt (document ready)');
-        initializeMapSimple();
-    }, 500);
+    setTimeout(initializeMapSimple, 500);
 }
 
 // Try after DOM content loaded
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM loaded, attempting NUCLEAR auto-load...');
+    console.log('DOM loaded, attempting cache-free auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
 
 // Try after window fully loads
 window.addEventListener('load', () => {
-    console.log('🚀 Window loaded, attempting NUCLEAR auto-load...');
+    console.log('Window loaded, attempting cache-free auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
 
-// Multiple backup attempts with increasing delays
+// Backup attempts
 setTimeout(() => {
-    console.log('🚀 Backup attempt 1 (2s) - NUCLEAR');
+    console.log('Backup attempt 1 (2s) - cache-free');
     initializeMapSimple();
 }, 2000);
 
 setTimeout(() => {
-    console.log('🚀 Backup attempt 2 (4s) - NUCLEAR');
+    console.log('Backup attempt 2 (4s) - cache-free');
     initializeMapSimple();
 }, 4000);
 
 setTimeout(() => {
-    console.log('🚀 Backup attempt 3 (7s) - NUCLEAR');
+    console.log('Final attempt (7s) - cache-free');
     initializeMapSimple();
 }, 7000);
 
-setTimeout(() => {
-    console.log('🚀 Final attempt (10s) - NUCLEAR');
-    initializeMapSimple();
-}, 10000);
-
-// Enhanced manual refresh function
+// Manual refresh function for the button - now cache-free
 function refreshMap() {
-    console.log('🚀 MANUAL NUCLEAR REFRESH TRIGGERED 🚀');
-    nuclearCacheClear();
-    setTimeout(() => {
-        loadObservations();
-    }, 1000);
+    console.log('Manual cache-free refresh triggered');
+    clearBrowserCache();
+    loadObservations();
 }
-
-// GLOBAL NUCLEAR FUNCTIONS
-window.nuclearRefresh = function() {
-    console.log('☢️ NUCLEAR REFRESH BUTTON PRESSED ☢️');
-    nuclearCacheClear();
-    setTimeout(() => {
-        loadObservations();
-    }, 1000);
-};
-
-window.hardReload = function() {
-    console.log('🔄 HARD RELOAD INITIATED 🔄');
-    nuclearCacheClear();
-    window.location.reload(true); // Force reload from server
-};
-
-window.superDebug = function() {
-    console.log('🔍 SUPER DEBUG MODE 🔍');
-    console.log('Current time:', new Date().toLocaleString());
-    console.log('Document ready:', document.readyState);
-    console.log('Leaflet available:', typeof L !== 'undefined');
-    console.log('Map element exists:', !!document.getElementById('map'));
-    console.log('Map initialized:', typeof map !== 'undefined');
-    console.log('Current observations:', observations.length);
-    console.log('Load button exists:', !!document.querySelector('button[onclick*="loadObservations"]'));
-    console.log('Is loading:', isLoading);
-    console.log('Sample cache-bust URL:', addAggressiveCacheBusting('https://example.com/test.html'));
-    console.log('Super cache-bust params:', getSuperCacheBustingParam());
-    
-    // Test if we can see any recent content in existing observations
-    if (observations.length > 0) {
-        const recentObs = observations.filter(obs => obs.date && obs.date.includes('2024'));
-        console.log('Observations with 2024 dates:', recentObs.length);
-        if (recentObs.length > 0) {
-            console.log('Sample recent observation:', recentObs[0]);
-        }
-    }
-};
 
 // Enhanced debug function with cache info
 function debugGitHub() {
-    console.log('🔍 NUCLEAR GITHUB DEBUG 🔍');
-    window.superDebug();
-}
-
-// Run debug after a delay
-setTimeout(debugGitHub, 3000);
-
-// Add status indicator to page
-function addStatusIndicator() {
-    const indicator = document.createElement('div');
-    indicator.id = 'nuclear-status';
-    indicator.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: #007bff;
-        color: white;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-size: 12px;
-        z-index: 9999;
-        font-family: monospace;
-    `;
-    indicator.textContent = '🚀 NUCLEAR MODE ACTIVE';
+    console.log('=== CACHE-FREE GITHUB DEBUG ===');
+    console.log('Document ready:', document.readyState);
+    console.log('Leaflet available:', typeof L !== 'undefined');
+    console.log('Map exists:', !!document.getElementById('map'));
+    console.log('Map initialized:', typeof map !== 'undefined');
+    console.log('Observations:', observations.length);
+    console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
+    console.log('Cache-busting timestamp:', getCacheBustingParam());
     
-    document.body.appendChild(indicator);
-    
-    // Remove after 10 seconds
-    setTimeout(() => {
-        if (indicator.parentElement) {
-            indicator.remove();
-        }
-    }, 10000);
-}
-
-// Add status indicator when script loads
-if (document.body) {
-    addStatusIndicator();
-} else {
-    document.addEventListener('DOMContentLoaded', addStatusIndicator);
-}
-
-console.log('☢️ NUCLEAR BUTTERFLY SCRIPT FULLY LOADED ☢️');
-console.log('Available NUCLEAR functions:');
-console.log('- window.nuclearRefresh() - Nuclear cache clear + refresh');
-console.log('- window.hardReload() - Nuclear clear + hard page reload');
-console.log('- window.superDebug() - Comprehensive debug info');
-console.log('- refreshMap() - Standard nuclear refresh');
-console.log('🚀 ALL CACHE-BUSTING SYSTEMS ARMED AND READY! 🚀');
+    // Test cache-busting URL generation
+    console.log
