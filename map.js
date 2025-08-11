@@ -33,51 +33,67 @@ function initMap() {
     }
 }
 
-// Updated parseCoordinates function with decimal seconds support
-// Enhanced parseCoordinates function with better decimal coordinate support
+// Enhanced parseCoordinates function with better Safari compatibility
 function parseCoordinates(text) {
     if (!text) return null;
 
     console.log('Parsing coordinates from:', text.substring(0, 100) + '...'); // Debug log
 
-    // Decode HTML entities first - including degree symbol
+    // More aggressive HTML entity decoding for Safari compatibility
     const decodedText = text
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/&amp;/g, '&')
         .replace(/&quot;/g, '"')
-        .replace(/&#176;/g, '°');
+        .replace(/&#176;/g, '°')
+        .replace(/&deg;/g, '°')
+        .replace(/&#39;/g, "'")
+        .replace(/&apos;/g, "'")
+        .replace(/&#8217;/g, "'")
+        .replace(/&#8242;/g, "'")
+        .replace(/&#8243;/g, '"');
     
-    // Pattern for coordinates - ENHANCED with decimal coordinate support
+    console.log('Decoded text:', decodedText.substring(0, 200)); // Debug log for Safari
+    
+    // Enhanced coordinate patterns with better Safari compatibility
     const coordPatterns = [
+        // PRIORITY: Your specific format - plain decimal coordinates in parentheses
+        /\(\s*(-?[0-9]+\.?[0-9]*)\s*,\s*(-?[0-9]+\.?[0-9]*)\s*\)/g,
+        
+        // Alternative parentheses patterns
+        /\(\s*([0-9]+\.?[0-9]*)\s*,\s*(-[0-9]+\.?[0-9]*)\s*\)/g,
+        /\(\s*(-?[0-9]+\.?[0-9]*)\s*,?\s*(-?[0-9]+\.?[0-9]*)\s*\)/g,
+        
         // DMS format with decimal seconds support
-        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
-        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
-        /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
-        /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
-        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
+        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([NS])\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([EW])[^)]*\)/g,
+        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([EW])[^)]*\)/g,
+        /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([EW])/g,
+        /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([NS])([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([EW])/g,
+        /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)['"]([EW])/g,
         
         // Decimal degrees with direction indicators
-        /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
-        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
+        /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/g,
+        /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/g,
         
-        // NEW: Plain decimal coordinates (latitude, longitude) - handles negative numbers
-        /\(?(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)?/,
+        // Plain decimal coordinates without parentheses
+        /(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)/g,
         
-        // NEW: Decimal coordinates with parentheses
-        /\((-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)/,
-        
-        // NEW: Space-separated decimal coordinates
-        /(-?[0-9]+\.[0-9]+)\s+(-?[0-9]+\.[0-9]+)/,
+        // Space-separated decimal coordinates
+        /(-?[0-9]+\.[0-9]+)\s+(-?[0-9]+\.[0-9]+)/g,
         
         // Fallback: any two decimal numbers that could be coordinates
-        /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/
+        /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/g
     ];
 
-    for (let pattern of coordPatterns) {
-        const match = decodedText.match(pattern);
+    // Try each pattern
+    for (let i = 0; i < coordPatterns.length; i++) {
+        const pattern = coordPatterns[i];
+        // Reset regex lastIndex for global patterns
+        pattern.lastIndex = 0;
+        
+        const match = pattern.exec(decodedText);
         if (match) {
-            console.log('Coordinate match found:', match); // Debug log
+            console.log(`Pattern ${i + 1} matched:`, match); // Debug log
             
             if (match.length >= 8) {
                 // DMS format with decimal seconds support
@@ -97,8 +113,10 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
-                console.log('Parsed DMS coordinates:', [lat, lon]);
-                return [lat, lon];
+                if (isValidCoordinate(lat, lon)) {
+                    console.log('✅ Parsed DMS coordinates:', [lat, lon]);
+                    return [lat, lon];
+                }
             } else if (match.length >= 4) {
                 // Decimal format with direction indicators
                 let lat = parseFloat(match[1]);
@@ -109,61 +127,90 @@ function parseCoordinates(text) {
                 if (latDir === 'S') lat = -lat;
                 if (lonDir === 'W') lon = -lon;
 
-                console.log('Parsed decimal coordinates with directions:', [lat, lon]);
-                return [lat, lon];
+                if (isValidCoordinate(lat, lon)) {
+                    console.log('✅ Parsed decimal coordinates with directions:', [lat, lon]);
+                    return [lat, lon];
+                }
             } else if (match.length >= 3) {
-                // Plain decimal coordinates (new patterns)
+                // Plain decimal coordinates
                 const lat = parseFloat(match[1]);
                 const lon = parseFloat(match[2]);
                 
-                // Validate coordinate ranges
-                if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-                    console.log('Parsed plain decimal coordinates:', [lat, lon]);
+                if (isValidCoordinate(lat, lon)) {
+                    console.log('✅ Parsed plain decimal coordinates:', [lat, lon]);
                     return [lat, lon];
                 }
             }
         }
     }
 
-    console.log('No coordinates found in:', decodedText.substring(0, 200));
+    console.log('❌ No valid coordinates found in:', decodedText.substring(0, 200));
     return null;
 }
 
-// Test the function with various coordinate formats
-console.log('Testing coordinate parsing:');
-console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
-console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
-console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
-console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
-console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
+// Helper function to validate coordinates
+function isValidCoordinate(lat, lon) {
+    return !isNaN(lat) && !isNaN(lon) && 
+           lat >= -90 && lat <= 90 && 
+           lon >= -180 && lon <= 180 &&
+           lat !== 0 && lon !== 0; // Exclude exactly 0,0 as likely invalid
+}
 
-// Extract observation data from HTML content
+// Enhanced extraction function with better Safari DOM handling
 function extractObservations(htmlContent, sourceUrl) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
     const foundObservations = [];
 
-    // Find all image links with data-title attributes
-    const imageLinks = doc.querySelectorAll('a[data-title]');
+    // Try multiple selectors for better Safari compatibility
+    const selectors = [
+        'a[data-title]',
+        'a[data-lightbox] img',
+        'td a[data-title]',
+        '.img-container a[data-title]'
+    ];
+
+    let imageLinks = [];
+    for (const selector of selectors) {
+        const elements = doc.querySelectorAll(selector);
+        if (elements.length > 0) {
+            imageLinks = Array.from(elements);
+            console.log(`Found ${elements.length} elements with selector: ${selector}`);
+            break;
+        }
+    }
+
     console.log(`Found ${imageLinks.length} image links with data-title in ${getPageName(sourceUrl)}`);
 
-    imageLinks.forEach((link, index) => {
+    imageLinks.forEach((element, index) => {
+        // Get the link element (might be the element itself or parent)
+        const link = element.tagName === 'A' ? element : element.closest('a');
+        if (!link) return;
+
         const dataTitle = link.getAttribute('data-title');
-        const img = link.querySelector('img');
+        const img = link.querySelector('img') || element;
         
         if (dataTitle && img) {
             console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...'); // Debug log
             
-            // Decode HTML entities in data-title
-            const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            // Safari-specific: Try getting attribute in different ways
+            let titleText = dataTitle;
+            if (!titleText && link.dataset) {
+                titleText = link.dataset.title;
+            }
+            
+            if (!titleText) {
+                console.log('No data-title found, skipping');
+                return;
+            }
             
             // Parse species and common name - handle both <p4><i> and <i> formats, including broken </a> tags
-            let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+?)<\/a><\/p4>/);
+            let speciesMatch = titleText.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+?)<\/a><\/p4>/);
             if (!speciesMatch) {
-                speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
+                speciesMatch = titleText.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
             }
             if (!speciesMatch) {
-                speciesMatch = decodedTitle.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
+                speciesMatch = titleText.match(/<i>(.*?)<\/i>\s*[-–]\s*([^<]+?)(?:<br|$)/);
             }
             
             let species = 'Unknown Species';
@@ -171,17 +218,17 @@ function extractObservations(htmlContent, sourceUrl) {
 
             if (speciesMatch) {
                 species = speciesMatch[1].trim();
-                commonName = speciesMatch[2].trim();
+                commonName = speciesMatch[2].trim().replace(/<\/a>.*$/, ''); // Clean up any trailing tags
                 console.log(`Parsed species: ${species} - ${commonName}`);
             } else {
                 console.log('Could not parse species from title');
             }
 
-            // Parse coordinates
-            const coordinates = parseCoordinates(decodedTitle);
+            // Parse coordinates with enhanced function
+            const coordinates = parseCoordinates(titleText);
             
             if (coordinates) {
-                console.log(`Found coordinates: ${coordinates}`);
+                console.log(`✅ Found coordinates: ${coordinates}`);
                 
                 // Extract location name - everything between <br/> and coordinates
                 let location = '';
@@ -192,7 +239,7 @@ function extractObservations(htmlContent, sourceUrl) {
                 ];
                 
                 for (let pattern of locationPatterns) {
-                    const locationMatch = decodedTitle.match(pattern);
+                    const locationMatch = titleText.match(pattern);
                     if (locationMatch) {
                         location = locationMatch[1].trim();
                         break;
@@ -200,14 +247,14 @@ function extractObservations(htmlContent, sourceUrl) {
                 }
 
                 // Extract date
-                const dateMatch = decodedTitle.match(/(\d{4}\/\d{2}\/\d{2})/);
+                const dateMatch = titleText.match(/(\d{4}\/\d{2}\/\d{2})/);
                 let date = '';
                 if (dateMatch) {
                     date = dateMatch[1];
                 }
 
                 // Extract photographer
-                const photographerMatch = decodedTitle.match(/©\s*([^&]+(?:&[^&]+)*)/);
+                const photographerMatch = titleText.match(/©\s*([^&]+(?:&[^&]+)*)/);
                 let photographer = '';
                 if (photographerMatch) {
                     photographer = photographerMatch[1].trim();
@@ -220,15 +267,16 @@ function extractObservations(htmlContent, sourceUrl) {
                     location: location,
                     date: date,
                     photographer: photographer,
-                    imageUrl: img.getAttribute('src'),
-                    fullImageUrl: link.getAttribute('href'),
+                    imageUrl: img.getAttribute('src') || img.src,
+                    fullImageUrl: link.getAttribute('href') || link.href,
                     sourceUrl: sourceUrl,
-                    originalTitle: decodedTitle
+                    originalTitle: titleText
                 });
                 
-                console.log(`Added observation: ${species} at ${location}`);
+                console.log(`✅ Added observation: ${species} at ${location} (${coordinates})`);
             } else {
-                console.log(`No coordinates found for: ${species} - ${commonName}`);
+                console.log(`❌ No coordinates found for: ${species} - ${commonName}`);
+                console.log('Title text was:', titleText.substring(0, 200));
             }
         }
     });
