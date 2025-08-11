@@ -129,13 +129,6 @@ function parseCoordinates(text) {
     return null;
 }
 
-// Test the function with various coordinate formats
-console.log('Testing coordinate parsing:');
-console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
-console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
-console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
-console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
-console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
 
 // Extract observation data from HTML content
 function extractObservations(htmlContent, sourceUrl) {
