@@ -129,6 +129,13 @@ function parseCoordinates(text) {
     return null;
 }
 
+// Test the function with various coordinate formats
+console.log('Testing coordinate parsing:');
+console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
+console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
+console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
+console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
+console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
 
 // Extract observation data from HTML content
 function extractObservations(htmlContent, sourceUrl) {
@@ -273,65 +280,72 @@ async function loadObservations() {
     const errors = [];
     const maxRetries = 2; // Reduced retries to speed up
 
-    async function fetchWithFallbacks(url) {
-        for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
-            const proxy = proxyServices[proxyIndex];
-            
-            for (let retry = 0; retry < maxRetries; retry++) {
-                try {
-                    const proxyUrl = proxy.url + encodeURIComponent(url);
-                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
+   // Add cache-busting to the fetch function
+async function fetchWithFallbacks(url) {
+    for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
+        const proxy = proxyServices[proxyIndex];
+        
+        for (let retry = 0; retry < maxRetries; retry++) {
+            try {
+                // ADD CACHE BUSTING: Add timestamp to prevent Safari caching
+                const cacheBuster = `?t=${Date.now()}&r=${Math.random()}`;
+                const originalUrl = url + (url.includes('?') ? '&' : '?') + `cb=${Date.now()}`;
+                const proxyUrl = proxy.url + encodeURIComponent(originalUrl);
+                
+                console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 20000);
+                
+                const response = await fetch(proxyUrl, {
+                    signal: controller.signal,
+                    headers: {
+                        'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                        // ADD SAFARI-SPECIFIC CACHE HEADERS
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
+                
+                clearTimeout(timeoutId);
+                
+                if (response.ok) {
+                    let content;
                     
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
-                    
-                    const response = await fetch(proxyUrl, {
-                        signal: controller.signal,
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                        }
-                    });
-                    
-                    clearTimeout(timeoutId);
-                    
-                    if (response.ok) {
-                        let content;
-                        
-                        // Handle different proxy response formats
-                        if (proxy.type === 'json') {
-                            const data = await response.json();
-                            content = data.contents || data.body;
-                        } else {
-                            content = await response.text();
-                        }
-                        
-                        if (content && content.length > 1000) { // Basic validation
-                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
-                            return content;
-                        } else {
-                            throw new Error('Content too short or empty');
-                        }
+                    // Handle different proxy response formats
+                    if (proxy.type === 'json') {
+                        const data = await response.json();
+                        content = data.contents || data.body;
                     } else {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                        content = await response.text();
                     }
                     
-                } catch (error) {
-                    console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
-                    
-                    if (retry < maxRetries - 1) {
-                        // Wait before retrying (shorter delays)
-                        const delay = 1000 + (retry * 1000);
-                        console.log(`Waiting ${delay}ms before retry...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
+                    if (content && content.length > 1000) {
+                        console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
+                        return content;
+                    } else {
+                        throw new Error('Content too short or empty');
                     }
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+            } catch (error) {
+                console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
+                
+                if (retry < maxRetries - 1) {
+                    const delay = 1000 + (retry * 1000);
+                    console.log(`Waiting ${delay}ms before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, delay));
                 }
             }
         }
-        
-        throw new Error('All proxies and retries failed');
     }
-
+    
+    throw new Error('All proxies and retries failed');
+}
     // Process each URL with robust fetching
     for (let i = 0; i < sourceUrls.length; i++) {
         const url = sourceUrls[i];
