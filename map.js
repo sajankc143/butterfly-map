@@ -2,45 +2,387 @@ let map;
 let observations = [];
 let markers = [];
 let markerGroup;
-let isLoading = false; // Prevent multiple simultaneous loads
+let isLoading = false;
+let geocoder = null;
+let isViewingSingleObservation = false; // Add this flag
 
-// Source URLs to load automatically
 const sourceUrls = [
     "https://www.butterflyexplorers.com/p/new-butterflies.html",
-    "https://www.butterflyexplorers.com/p/dual-checklist.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-arizona.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-florida.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-texas.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-puerto-rico.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-new-mexico.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-panama.html"
+    
 ];
-
-// Initialize the map
+function showObservationOnMap(observationData) {
+    if (!map || !observationData) return;
+    
+    // Set flag to prevent auto-sync from overriding this view
+    isViewingSingleObservation = true;
+    
+    console.log('Showing single observation on map');
+    
+    // Parse coordinates from the observation data
+    const coords = parseCoordinates(observationData.originalTitle || observationData.fullTitle);
+    
+    if (!coords) {
+        console.log('No coordinates found for this observation');
+        isViewingSingleObservation = false;
+        return;
+    }
+    
+    // Clear existing markers but DON'T clear observations array
+    clearMap();
+    
+    // Create marker for this specific observation
+    const markerRadius = getMarkerRadius();
+    const marker = L.circleMarker(coords, {
+        radius: markerRadius + 2,
+        fillColor: '#ff0000',
+        color: '#ffffff',
+        weight: 3,
+        opacity: 1,
+        fillOpacity: 0.9,
+        interactive: true
+    });
+    
+    // Create popup content
+    const popupContent = `
+        <div>
+            <div class="popup-species">${observationData.species}</div>
+            <div class="popup-common">${observationData.commonName}</div>
+            ${observationData.thumbnailUrl ? `<img src="${observationData.thumbnailUrl}" class="popup-image" alt="${observationData.species}" onerror="this.style.display='none'">` : ''}
+            <div class="popup-location">📍 ${observationData.location || 'Location not specified'}</div>
+            ${observationData.date ? `<div class="popup-date">📅 ${new Date(observationData.date).toLocaleDateString()}</div>` : ''}
+        </div>
+    `;
+    
+    marker.bindPopup(popupContent, {
+        maxWidth: 300,
+        closeButton: true,
+        autoPan: true,
+        keepInView: true,
+        className: 'custom-popup'
+    });
+    
+    // Add marker to map
+    marker.addTo(markerGroup);
+    
+    // Center map on this observation
+    map.setView(coords, 12);
+    
+    // Auto-open the popup
+    marker.openPopup();
+    
+    console.log(`Map centered on observation: ${observationData.species} at`, coords);
+}
+// Enhanced initMap function with simplified location search
 function initMap() {
-    map = L.map('map').setView([39.8283, -98.5795], 4); // Center on US
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    
+    map = L.map('map', {
+        preferCanvas: true,
+        zoomAnimation: true,
+        fadeAnimation: true,
+        markerZoomAnimation: true,
+        tap: true,
+        touchZoom: true,
+        tapTolerance: isTouchDevice ? 20 : 10,
+        maxTouchPoints: 2,
+        bounceAtZoomLimits: false,
+        zoomSnap: isTouchDevice ? 0.5 : 1,
+        zoomDelta: isTouchDevice ? 0.5 : 1
+    }).setView([39.8283, -98.5795], 4);
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+    // Define different tile layers
+    const baseLayers = {
+        "Normal": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 18,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+            keepBuffer: 2
+        }),
+        
+        "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '© Esri, Maxar, Earthstar Geographics',
+            maxZoom: 18,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+            keepBuffer: 2
+        }),
+        
+        "Terrain": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenTopoMap contributors',
+            maxZoom: 17,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+            keepBuffer: 2
+        }),
+        
+        "Dark": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© CartoDB contributors',
+            maxZoom: 19,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
+            keepBuffer: 2
+        })
+    };
+
+    // Add default layer (Normal)
+    baseLayers["Normal"].addTo(map);
+
+    // Add layer control
+    const layerControl = L.control.layers(baseLayers, null, {
+        position: 'topright',
+        collapsed: false
     }).addTo(map);
 
-    markerGroup = L.layerGroup().addTo(map);
+    // Create custom toggle button
+    const mapToggleControl = L.Control.extend({
+        options: {
+            position: 'topleft'
+        },
 
-    // Add species filter functionality
+        onAdd: function(map) {
+            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
+            
+            container.style.cssText = `
+                background: rgba(255, 255, 255, 0.9);
+                width: 120px;
+                height: 40px;
+                border-radius: 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 12px;
+                color: #333;
+                backdrop-filter: blur(10px);
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                transition: all 0.3s ease;
+            `;
+            
+            container.innerHTML = '🗺️ Normal';
+            
+            let currentLayer = 'Normal';
+            
+            container.onclick = function() {
+                // Cycle through map types
+                const layerKeys = Object.keys(baseLayers);
+                const currentIndex = layerKeys.indexOf(currentLayer);
+                const nextIndex = (currentIndex + 1) % layerKeys.length;
+                const nextLayer = layerKeys[nextIndex];
+                
+                // Remove current layer and add new one
+                map.removeLayer(baseLayers[currentLayer]);
+                map.addLayer(baseLayers[nextLayer]);
+                
+                // Update button
+                currentLayer = nextLayer;
+                const icons = {
+                    'Normal': '🗺️',
+                    'Satellite': '🛰️',
+                    'Terrain': '🏔️',
+                    'Dark': '🌙'
+                };
+                container.innerHTML = `${icons[nextLayer]} ${nextLayer}`;
+                
+                // Update button style based on layer
+                if (nextLayer === 'Dark') {
+                    container.style.background = 'rgba(50, 50, 50, 0.9)';
+                    container.style.color = '#fff';
+                } else {
+                    container.style.background = 'rgba(255, 255, 255, 0.9)';
+                    container.style.color = '#333';
+                }
+            };
+            
+            // Prevent map interaction when clicking the control
+            L.DomEvent.disableClickPropagation(container);
+            
+            return container;
+        }
+    });
+
+    // Add the custom toggle control
+    map.addControl(new mapToggleControl());
+
+    markerGroup = L.layerGroup().addTo(map);
+    
+    // Add zoom event listener for responsive marker sizing
+    map.on('zoomend', updateMarkerSizes);
+
     const speciesFilter = document.getElementById('speciesFilter');
     if (speciesFilter) {
         speciesFilter.addEventListener('input', filterObservations);
     }
+
+    // Initialize the simplified location search controls
+    initializeLocationSearchControls();
+}
+// UPDATE this function in your map script
+function resetMapToAllObservations() {
+    if (!map) return;
+    
+    console.log('Resetting map to show all observations');
+    
+    // IMPORTANT: Clear the single observation flag
+    isViewingSingleObservation = false;
+    
+    // If we have filtered images from the gallery, use those
+    if (typeof infiniteGalleryUpdater !== 'undefined' && 
+        infiniteGalleryUpdater.filteredImages && 
+        infiniteGalleryUpdater.filteredImages.length > 0) {
+        
+        console.log(`Restoring map view with ${infiniteGalleryUpdater.filteredImages.length} filtered observations`);
+        syncMapWithSearchResults(infiniteGalleryUpdater.filteredImages);
+    } 
+    // Otherwise fall back to all loaded observations
+    else if (observations && observations.length > 0) {
+        console.log(`Restoring map view with ${observations.length} total observations`);
+        displayObservations();
+    }
+    // If no observations available, just clear the map
+    else {
+        console.log('No observations to display, clearing map');
+        clearMap();
+    }
 }
 
-// Updated parseCoordinates function with decimal seconds support
-// Enhanced parseCoordinates function with better decimal coordinate support
+// UPDATE this function in your map script
+function syncMapWithSearchResults(searchFilteredImages) {
+    // FIXED: Always clear the flag when syncing with search results
+    isViewingSingleObservation = false;
+    
+    // Clear existing observations
+    observations = [];
+    
+    // Convert search results to map observation format
+    searchFilteredImages.forEach(image => {
+        // Try to extract coordinates from the image data
+        const coords = parseCoordinates(image.originalTitle || image.fullTitle);
+        
+        if (coords) {
+            observations.push({
+                species: image.species,
+                commonName: image.commonName,
+                coordinates: coords,
+                location: image.location || '',
+                date: image.date || '',
+                photographer: '', // Extract if available
+                imageUrl: image.thumbnailUrl,
+                fullImageUrl: image.fullImageUrl,
+                sourceUrl: image.sourceUrl,
+                originalTitle: image.originalTitle || image.fullTitle
+            });
+        }
+    });
+    
+    // Update the map display
+    displayObservations();
+    console.log(`Map synced with ${observations.length} observations from search results`);
+}
+
+// Simplified function to initialize location search controls
+function initializeLocationSearchControls() {
+    const topControlsContainer = document.querySelector('.top-controls');
+    
+    if (topControlsContainer) {
+        const locationSearchHTML = `
+            <div class="control-group">
+                <label>Go to Location</label>
+                <div style="display: flex; gap: 5px;">
+                    <input type="text" id="locationInput" placeholder="Enter city, state, or coordinates..." style="flex: 1;" />
+                    <button onclick="searchByLocation()" style="padding: 8px 12px;">Go</button>
+                </div>
+                <div id="locationResults" style="font-size: 12px; color: #666; min-height: 20px; margin-top: 5px;"></div>
+            </div>
+        `;
+        
+        topControlsContainer.insertAdjacentHTML('beforeend', locationSearchHTML);
+        
+        // Add enter key handler for location input
+        const locationInput = document.getElementById('locationInput');
+        if (locationInput) {
+            locationInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    searchByLocation();
+                }
+            });
+        }
+    }
+}
+
+// Simplified location search - just moves map to location
+async function searchByLocation() {
+    const input = document.getElementById('locationInput');
+    const query = input.value.trim();
+    
+    if (!query) {
+        alert('Please enter a location');
+        return;
+    }
+    
+    // Check if input looks like coordinates
+    const coordMatch = query.match(/^(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)$/);
+    if (coordMatch) {
+        const lat = parseFloat(coordMatch[1]);
+        const lng = parseFloat(coordMatch[2]);
+        
+        if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+            goToLocation(lat, lng, query);
+            return;
+        }
+    }
+    
+    // Geocode the location using Nominatim (free OpenStreetMap geocoding)
+    try {
+        showLocationResults('Searching for location...');
+        
+        const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`);
+        const data = await response.json();
+        
+        if (data && data.length > 0) {
+            const lat = parseFloat(data[0].lat);
+            const lng = parseFloat(data[0].lon);
+            const displayName = data[0].display_name;
+            
+            goToLocation(lat, lng, displayName);
+        } else {
+            showLocationResults('Location not found. Try a different search term or use coordinates (lat, lng).');
+        }
+    } catch (error) {
+        console.error('Geocoding error:', error);
+        showLocationResults('Error searching for location. Try using coordinates (lat, lng) format.');
+    }
+}
+
+// Simple function to move map to location
+function goToLocation(lat, lng, locationName = null) {
+    // Move map to location
+    map.setView([lat, lng], 10);
+    
+    // Show simple confirmation message
+    const locationDisplay = locationName || `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+    showLocationResults(`Moved to: ${locationDisplay}`);
+    
+    // Clear the message after a few seconds
+    setTimeout(() => {
+        showLocationResults('');
+    }, 3000);
+}
+
+function showLocationResults(html) {
+    const resultsDiv = document.getElementById('locationResults');
+    if (resultsDiv) {
+        resultsDiv.innerHTML = html;
+    }
+}
+
+// Original functions (unchanged)
 function parseCoordinates(text) {
     if (!text) return null;
 
-    console.log('Parsing coordinates from:', text.substring(0, 100) + '...'); // Debug log
+    console.log('Parsing coordinates from:', text.substring(0, 100) + '...');
 
-    // Decode HTML entities first - including degree symbol
     const decodedText = text
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
@@ -48,39 +390,26 @@ function parseCoordinates(text) {
         .replace(/&quot;/g, '"')
         .replace(/&#176;/g, '°');
     
-    // Pattern for coordinates - ENHANCED with decimal coordinate support
     const coordPatterns = [
-        // DMS format with decimal seconds support
         /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
         /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])[^)]*\)/,
         /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s+([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
         /([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
         /\(([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([NS])\s*,?\s*([0-9]+)°([0-9]+)'([0-9]+(?:\.[0-9]+)?)''([EW])/,
-        
-        // Decimal degrees with direction indicators
         /\(([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
         /([0-9.-]+)[°\s]*([NS])[,\s]+([0-9.-]+)[°\s]*([EW])/,
-        
-        // NEW: Plain decimal coordinates (latitude, longitude) - handles negative numbers
         /\(?(-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)?/,
-        
-        // NEW: Decimal coordinates with parentheses
         /\((-?[0-9]+\.[0-9]+)\s*,\s*(-?[0-9]+\.[0-9]+)\)/,
-        
-        // NEW: Space-separated decimal coordinates
         /(-?[0-9]+\.[0-9]+)\s+(-?[0-9]+\.[0-9]+)/,
-        
-        // Fallback: any two decimal numbers that could be coordinates
         /([0-9]+(?:\.[0-9]+)?)[°\s]*[NS]?[,\s]+([0-9]+(?:\.[0-9]+)?)[°\s]*[EW]?/
     ];
 
     for (let pattern of coordPatterns) {
         const match = decodedText.match(pattern);
         if (match) {
-            console.log('Coordinate match found:', match); // Debug log
+            console.log('Coordinate match found:', match);
             
             if (match.length >= 8) {
-                // DMS format with decimal seconds support
                 const latDeg = parseInt(match[1]);
                 const latMin = parseInt(match[2]);
                 const latSec = parseFloat(match[3]);
@@ -100,7 +429,6 @@ function parseCoordinates(text) {
                 console.log('Parsed DMS coordinates:', [lat, lon]);
                 return [lat, lon];
             } else if (match.length >= 4) {
-                // Decimal format with direction indicators
                 let lat = parseFloat(match[1]);
                 const latDir = match[2];
                 let lon = parseFloat(match[3]);
@@ -112,11 +440,9 @@ function parseCoordinates(text) {
                 console.log('Parsed decimal coordinates with directions:', [lat, lon]);
                 return [lat, lon];
             } else if (match.length >= 3) {
-                // Plain decimal coordinates (new patterns)
                 const lat = parseFloat(match[1]);
                 const lon = parseFloat(match[2]);
                 
-                // Validate coordinate ranges
                 if (lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
                     console.log('Parsed plain decimal coordinates:', [lat, lon]);
                     return [lat, lon];
@@ -129,21 +455,11 @@ function parseCoordinates(text) {
     return null;
 }
 
-// Test the function with various coordinate formats
-console.log('Testing coordinate parsing:');
-console.log('DMS:', parseCoordinates('(36°34\'41.1\'\'N 105°26\'26.5\'\'W, 10227 ft.)'));
-console.log('Decimal with directions:', parseCoordinates('26.1766°N, 98.3659°W'));
-console.log('Plain decimal:', parseCoordinates('26.1766, -98.3659'));
-console.log('Parentheses decimal:', parseCoordinates('(26.1766, -98.3659)'));
-console.log('Space separated:', parseCoordinates('26.1766 -98.3659'));
-
-// Extract observation data from HTML content
 function extractObservations(htmlContent, sourceUrl) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlContent, 'text/html');
     const foundObservations = [];
 
-    // Find all image links with data-title attributes
     const imageLinks = doc.querySelectorAll('a[data-title]');
     console.log(`Found ${imageLinks.length} image links with data-title in ${getPageName(sourceUrl)}`);
 
@@ -152,12 +468,10 @@ function extractObservations(htmlContent, sourceUrl) {
         const img = link.querySelector('img');
         
         if (dataTitle && img) {
-            console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...'); // Debug log
+            console.log(`Processing image ${index + 1}:`, dataTitle.substring(0, 100) + '...');
             
-            // Decode HTML entities in data-title
             const decodedTitle = dataTitle.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
             
-            // Parse species and common name - handle both <p4><i> and <i> formats, including broken </a> tags
             let speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+?)<\/a><\/p4>/);
             if (!speciesMatch) {
                 speciesMatch = decodedTitle.match(/<p4><i>(.*?)<\/i>\s*[-–]\s*([^<]+)<\/p4>/);
@@ -177,18 +491,16 @@ function extractObservations(htmlContent, sourceUrl) {
                 console.log('Could not parse species from title');
             }
 
-            // Parse coordinates
             const coordinates = parseCoordinates(decodedTitle);
             
             if (coordinates) {
                 console.log(`Found coordinates: ${coordinates}`);
                 
-                // Extract location name - everything between <br/> and coordinates
                 let location = '';
                 const locationPatterns = [
-                    /<br\/?>\s*([^(]+?)(?:\s+\([0-9])/,  // Location before coordinates
-                    /<br\/?>\s*([^(]+?)$/,               // Location at end
-                    /<br\/?>\s*([^<]+?)\s+\d{4}\/\d{2}\/\d{2}/ // Location before date
+                    /<br\/?>\s*([^(]+?)(?:\s+\([0-9])/,
+                    /<br\/?>\s*([^(]+?)$/,
+                    /<br\/?>\s*([^<]+?)\s+\d{4}\/\d{2}\/\d{2}/
                 ];
                 
                 for (let pattern of locationPatterns) {
@@ -199,14 +511,12 @@ function extractObservations(htmlContent, sourceUrl) {
                     }
                 }
 
-                // Extract date
                 const dateMatch = decodedTitle.match(/(\d{4}\/\d{2}\/\d{2})/);
                 let date = '';
                 if (dateMatch) {
                     date = dateMatch[1];
                 }
 
-                // Extract photographer
                 const photographerMatch = decodedTitle.match(/©\s*([^&]+(?:&[^&]+)*)/);
                 let photographer = '';
                 if (photographerMatch) {
@@ -237,7 +547,6 @@ function extractObservations(htmlContent, sourceUrl) {
     return foundObservations;
 }
 
-// Robust loading function with multiple proxy fallbacks and retry logic
 async function loadObservations() {
     if (isLoading) {
         console.log('Already loading, skipping duplicate request');
@@ -256,7 +565,6 @@ async function loadObservations() {
     observations = [];
     clearMap();
 
-    // Better proxy services with multiple fallbacks
     const proxyServices = [
         {
             url: 'https://corsproxy.io/?',
@@ -278,7 +586,7 @@ async function loadObservations() {
 
     let totalLoaded = 0;
     const errors = [];
-    const maxRetries = 2; // Reduced retries to speed up
+    const maxRetries = 2;
 
     async function fetchWithFallbacks(url) {
         for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
@@ -290,7 +598,7 @@ async function loadObservations() {
                     console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
                     
                     const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 20000); // 20 second timeout
+                    const timeoutId = setTimeout(() => controller.abort(), 20000);
                     
                     const response = await fetch(proxyUrl, {
                         signal: controller.signal,
@@ -305,7 +613,6 @@ async function loadObservations() {
                     if (response.ok) {
                         let content;
                         
-                        // Handle different proxy response formats
                         if (proxy.type === 'json') {
                             const data = await response.json();
                             content = data.contents || data.body;
@@ -313,7 +620,7 @@ async function loadObservations() {
                             content = await response.text();
                         }
                         
-                        if (content && content.length > 1000) { // Basic validation
+                        if (content && content.length > 1000) {
                             console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
                             return content;
                         } else {
@@ -327,7 +634,6 @@ async function loadObservations() {
                     console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
                     
                     if (retry < maxRetries - 1) {
-                        // Wait before retrying (shorter delays)
                         const delay = 1000 + (retry * 1000);
                         console.log(`Waiting ${delay}ms before retry...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
@@ -339,7 +645,6 @@ async function loadObservations() {
         throw new Error('All proxies and retries failed');
     }
 
-    // Process each URL with robust fetching
     for (let i = 0; i < sourceUrls.length; i++) {
         const url = sourceUrls[i];
         const pageName = getPageName(url);
@@ -359,7 +664,6 @@ async function loadObservations() {
             
             console.log(`✅ ${pageName}: ${siteObservations.length} observations (Total: ${totalLoaded})`);
             
-            // Update loading status with progress
             if (loadingDiv) {
                 loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} observations found so far...`;
             }
@@ -368,24 +672,20 @@ async function loadObservations() {
             console.error(`❌ Failed to load ${pageName}:`, error.message);
             errors.push(`${pageName}: ${error.message}`);
             
-            // Continue with other URLs even if one fails
             if (loadingDiv) {
                 loadingDiv.textContent = `Failed to load ${pageName}, continuing with others...`;
             }
         }
 
-        // Shorter delay between requests
         if (i < sourceUrls.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     }
 
-    // Finish loading
     if (loadingDiv) {
         loadingDiv.style.display = 'none';
     }
 
-    // Show results and errors
     console.log(`\n=== LOADING COMPLETE ===`);
     console.log(`Successfully loaded: ${totalLoaded} observations`);
     console.log(`Failed pages: ${errors.length}`);
@@ -393,7 +693,6 @@ async function loadObservations() {
     if (errors.length > 0) {
         console.log('Errors:', errors);
         
-        // Show error notification but don't block the UI
         const errorDiv = document.createElement('div');
         errorDiv.style.cssText = `
             background: #fff3cd; 
@@ -416,7 +715,6 @@ async function loadObservations() {
             container.insertBefore(errorDiv, document.getElementById('map'));
         }
         
-        // Auto-remove after 15 seconds
         setTimeout(() => {
             if (errorDiv.parentElement) {
                 errorDiv.remove();
@@ -427,13 +725,11 @@ async function loadObservations() {
     displayObservations();
     isLoading = false;
     
-    // If we got some observations, consider it a success
     if (totalLoaded > 0) {
         console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} observations!`);
     } else {
         console.log('⚠️ No observations loaded - all sources may be down');
         
-        // Show retry option
         if (loadingDiv) {
             loadingDiv.style.display = 'block';
             loadingDiv.innerHTML = `
@@ -446,15 +742,62 @@ async function loadObservations() {
             `;
         }
     }
+
+    // SIMPLE FIX: Check URL before auto-syncing
+    const urlParams = new URLSearchParams(window.location.search);
+    const obsId = urlParams.get('obs');
+    
+    if (!obsId) {
+        // Only do normal sync if there's no observation ID in URL
+        if (typeof infiniteGalleryUpdater !== 'undefined' && 
+            infiniteGalleryUpdater.filteredImages && 
+            infiniteGalleryUpdater.currentSearchParams &&
+            !isViewingSingleObservation) {
+            
+            console.log('Initial sync with existing search filters');
+            syncMapWithSearchResults(infiniteGalleryUpdater.filteredImages);
+        }
+    } else {
+        console.log(`URL contains observation ID ${obsId}, skipping initial sync - waiting for gallery to show single observation`);
+    }
 }
 
-// Display observations on the map
+// Mobile-friendly displayObservations function:
 function displayObservations() {
+    // Check if URL has observation ID - if so, don't show all observations
+    const urlParams = new URLSearchParams(window.location.search);
+    const obsId = urlParams.get('obs');
+    
+    if (obsId) {
+        console.log('URL contains observation ID, skipping displayObservations');
+        return;
+    }
+    
+    // Don't display all observations if we're viewing a single one
+    if (isViewingSingleObservation) {
+        console.log('Skipping displayObservations - viewing single observation');
+        return;
+    }
+    
     markerGroup.clearLayers();
 
     const filteredObs = getCurrentFilteredObservations();
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
     filteredObs.forEach(obs => {
+        const markerRadius = getMarkerRadius();
+        const marker = L.circleMarker(obs.coordinates, {
+            radius: markerRadius,
+            fillColor: '#ff6b35',     
+            color: '#ffffff',         
+            weight: isTouchDevice ? 3 : 2,  
+            opacity: 1,
+            fillOpacity: 0.95,        
+            interactive: true,        
+            bubblingMouseEvents: false, 
+            pane: 'markerPane'       
+        });
+
         const popupContent = `
             <div>
                 <div class="popup-species">${obs.species}</div>
@@ -466,12 +809,38 @@ function displayObservations() {
             </div>
         `;
 
-        const marker = L.marker(obs.coordinates)
-            .bindPopup(popupContent)
-            .addTo(markerGroup);
+        marker.bindPopup(popupContent, {
+            maxWidth: isTouchDevice ? 280 : 300,
+            closeButton: true,
+            autoPan: true,
+            keepInView: true,
+            className: 'custom-popup',
+            autoPanPadding: [10, 10],
+            closeOnClick: true,          
+            closeOnEscapeKey: true       
+        });
+        
+        marker.on('click', function(e) {
+            if (!this.isPopupOpen()) {
+                this.openPopup();
+            }
+        });
+
+        if (isTouchDevice) {
+            marker.on('touchstart', function(e) {
+                const self = this;
+                setTimeout(() => {
+                    if (!self.isPopupOpen()) {
+                        self.openPopup();
+                    }
+                }, 100);
+            });
+        }
+
+        marker._butterflyMarker = true;
+        marker.addTo(markerGroup);
     });
 
-    // Fit map to show all markers
     if (filteredObs.length > 0) {
         const group = new L.featureGroup(markerGroup.getLayers());
         map.fitBounds(group.getBounds().pad(0.1));
@@ -480,12 +849,54 @@ function displayObservations() {
     updateStats();
 }
 
-// Filter observations based on species filter
+// Add this new function to calculate marker size based on zoom level
+function getMarkerRadius() {
+    if (!map) return 8; // Increased default size from 6 to 8
+    
+    const zoom = map.getZoom();
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    
+    if (isTouchDevice) {
+        // Enhanced mobile scaling - much larger at high zoom levels
+        if (zoom <= 4) return 10;       // Was 8, now 10
+        else if (zoom <= 6) return 11;  // Was 9, now 11
+        else if (zoom <= 8) return 12;  // Was 10, now 12
+        else if (zoom <= 10) return 14; // Was 12, now 14
+        else if (zoom <= 12) return 16; // Was 14, now 16
+        else if (zoom <= 14) return 18; // Was 16, now 18
+        else if (zoom <= 16) return 20; // Was 18, now 20
+        else return 22;                 // Was 20, now 22
+    } else {
+        // Desktop - increased sizes for easier clicking
+        if (zoom <= 4) return 6;        // Was 4, now 6
+        else if (zoom <= 6) return 7;   // Was 5, now 7
+        else if (zoom <= 8) return 8;   // Was 6, now 8
+        else if (zoom <= 10) return 9;  // Was 7, now 9
+        else if (zoom <= 12) return 10; // Was 8, now 10
+        else if (zoom <= 14) return 11; // Was 9, now 11
+        else return 12;                 // Was 10, now 12
+    }
+}
+
+// Add this function to update marker sizes when zoom changes (smooth)
+function updateMarkerSizes() {
+    const newRadius = getMarkerRadius();
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    
+    markerGroup.eachLayer(function(marker) {
+        if (marker._butterflyMarker && marker.setRadius) {
+            marker.setStyle({
+                radius: newRadius,
+                weight: isTouchDevice ? 3 : 2  // Adjust border thickness too
+            });
+        }
+    });
+}
+
 function filterObservations() {
     displayObservations();
 }
 
-// Get currently filtered observations
 function getCurrentFilteredObservations() {
     const speciesFilterElement = document.getElementById('speciesFilter');
     const speciesFilter = speciesFilterElement ? speciesFilterElement.value.toLowerCase() : '';
@@ -500,7 +911,6 @@ function getCurrentFilteredObservations() {
     );
 }
 
-// Clear the map
 function clearMap() {
     if (markerGroup) {
         markerGroup.clearLayers();
@@ -508,7 +918,6 @@ function clearMap() {
     updateStats();
 }
 
-// Update statistics
 function updateStats() {
     const filteredObs = getCurrentFilteredObservations();
     const uniqueSpecies = new Set(filteredObs.map(obs => obs.species)).size;
@@ -545,7 +954,6 @@ function updateStats() {
     }
 }
 
-// Get page name from URL
 function getPageName(url) {
     const pageNames = {
         'butterflies-of-texas.html': 'Texas',
@@ -564,11 +972,9 @@ function getPageName(url) {
     return 'Unknown';
 }
 
-// Initialize the application and AUTO-LOAD data
 function autoClickLoadButton() {
     console.log('=== ATTEMPTING AUTO-CLICK OF LOAD BUTTON ===');
     
-    // Find the load button by its onclick attribute
     const buttons = document.querySelectorAll('button');
     let loadButton = null;
     
@@ -597,11 +1003,9 @@ function autoClickLoadButton() {
     }
 }
 
-// Simple initialization
 function initializeMapSimple() {
     console.log('=== SIMPLE GITHUB PAGES INITIALIZATION ===');
     
-    // Initialize map if not already done
     if (typeof map === 'undefined') {
         const mapDiv = document.getElementById('map');
         if (mapDiv && typeof L !== 'undefined') {
@@ -613,7 +1017,6 @@ function initializeMapSimple() {
         }
     }
     
-    // Try auto-clicking the load button
     if (observations.length === 0 && !isLoading) {
         return autoClickLoadButton();
     }
@@ -621,27 +1024,22 @@ function initializeMapSimple() {
     return true;
 }
 
-// Multiple attempts with the simple approach
 console.log('Setting up auto-load for GitHub Pages...');
 
-// Try immediately if document is ready
 if (document.readyState !== 'loading') {
     setTimeout(initializeMapSimple, 500);
 }
 
-// Try after DOM content loaded
 document.addEventListener('DOMContentLoaded', () => {
     console.log('DOM loaded, attempting auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
 
-// Try after window fully loads
 window.addEventListener('load', () => {
     console.log('Window loaded, attempting auto-load...');
     setTimeout(initializeMapSimple, 500);
 });
 
-// Backup attempts
 setTimeout(() => {
     console.log('Backup attempt 1 (2s)');
     initializeMapSimple();
@@ -657,13 +1055,11 @@ setTimeout(() => {
     initializeMapSimple();
 }, 7000);
 
-// Manual refresh function for the button
 function refreshMap() {
     console.log('Manual refresh triggered');
     loadObservations();
 }
 
-// Debug function
 function debugGitHub() {
     console.log('=== GITHUB DEBUG ===');
     console.log('Document ready:', document.readyState);
@@ -674,5 +1070,4 @@ function debugGitHub() {
     console.log('Load button found:', !!document.querySelector('button[onclick*="loadObservations"]'));
 }
 
-// Run debug after a delay
 setTimeout(debugGitHub, 3000);
