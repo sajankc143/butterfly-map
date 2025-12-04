@@ -132,7 +132,7 @@ L.control.layers({
     'Satellite': satelliteLayer,
     'Street': streetLayer
 }).addTo(homeMap);
-    baseLayers["Normal"].addTo(homeMap);
+   
 
     const layerControl = L.control.layers(baseLayers, null, {
         position: 'topright',
