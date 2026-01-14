@@ -8,14 +8,8 @@ let isViewingSingleObservation = false;
 
 const sourceUrls = [
     "https://www.butterflyexplorers.com/p/new-butterflies.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-arizona.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-florida.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-texas.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-puerto-rico.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-new-mexico.html",
-    "https://www.butterflyexplorers.com/p/butterflies-of-panama.html"
+    
 ];
-
 function showObservationOnMap(observationData) {
     if (!homeMap || !observationData) return;
     
@@ -121,8 +115,24 @@ function initMap() {
             keepBuffer: 2
         })
     };
+// Add satellite layer and set as default
+const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap contributors'
+});
 
-    baseLayers["Normal"].addTo(homeMap);
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: 'Tiles © Esri'
+});
+
+// Add satellite as the BASE layer (so it shows by default)
+satelliteLayer.addTo(homeMap);
+
+// Then add layer control with satellite as default
+L.control.layers({
+    'Satellite': satelliteLayer,
+    'Street': streetLayer
+}).addTo(homeMap);
+   
 
     const layerControl = L.control.layers(baseLayers, null, {
         position: 'topright',
@@ -634,7 +644,6 @@ async function loadHomeObservations() {
         }
     }
 }
-
 function displayObservations() {
     const urlParams = new URLSearchParams(window.location.search);
     const obsId = urlParams.get('obs');
