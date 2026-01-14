@@ -542,19 +542,23 @@ async function loadHomeObservations() {
     clearMap();
 
     const proxyServices = [
-    {
-        url: 'https://api.allorigins.win/raw?url=',
-        type: 'text'
-    },
-    {
-        url: 'https://corsproxy.io/?',
-        type: 'text'
-    },
-    {
-        url: 'https://api.codetabs.com/v1/proxy?quest=',
-        type: 'text'
-    }
-];
+        {
+            url: 'https://corsproxy.io/?',
+            type: 'text'
+        },
+        {
+            url: 'https://api.allorigins.win/get?url=',
+            type: 'json'
+        },
+        {
+            url: 'https://api.codetabs.com/v1/proxy?quest=',
+            type: 'text'
+        },
+        {
+            url: 'https://thingproxy.freeboard.io/fetch/',
+            type: 'text'
+        }
+    ];
 
     let totalLoaded = 0;
     const errors = [];
