@@ -109,74 +109,51 @@ function loadHomeObservations() {
 function parseObservationsFromPage(doc, sourceUrl) {
     var observations = [];
     
-    // Method 1: Look for images with data-lat and data-lng attributes
-    var imagesWithData = doc.querySelectorAll('img[data-lat][data-lng]');
-    imagesWithData.forEach(function(img) {
-        observations.push({
-            lat: parseFloat(img.getAttribute('data-lat')),
-            lng: parseFloat(img.getAttribute('data-lng')),
-            name: img.alt || 'Unknown Butterfly',
-            image: img.src,
-            source: sourceUrl
-        });
-    });
+    // Look for links with data-title attribute containing coordinates
+    // Format: "Species Name<br/>Location (lat, lng, elevation) Date © Author"
+    var links = doc.querySelectorAll('a[data-title]');
     
-    // Method 2: Look for links with lat/lng in href
-    var linksWithCoords = doc.querySelectorAll('a[href*="lat="][href*="lng="]');
-    linksWithCoords.forEach(function(link) {
-        var href = link.href;
-        var latMatch = href.match(/lat=([-\d.]+)/);
-        var lngMatch = href.match(/lng=([-\d.]+)/);
+    links.forEach(function(link) {
+        var dataTitle = link.getAttribute('data-title');
         
-        if (latMatch && lngMatch) {
+        // Extract coordinates from format: (9.1253, -79.6935, 27 m)
+        var coordMatch = dataTitle.match(/\(([-\d.]+),\s*([-\d.]+),\s*[-\d.]+\s*m\)/);
+        
+        if (coordMatch) {
+            var lat = parseFloat(coordMatch[1]);
+            var lng = parseFloat(coordMatch[2]);
+            
+            // Extract species name from format: <p4><i>Species name</i> - Common Name</p4>
+            var speciesMatch = dataTitle.match(/<p4><i>([^<]+)<\/i>\s*-\s*([^<]+)<\/p4>/);
+            var scientificName = speciesMatch ? speciesMatch[1] : '';
+            var commonName = speciesMatch ? speciesMatch[2] : '';
+            
+            // Extract location (text before the coordinates)
+            var locationMatch = dataTitle.match(/<\/p4><br\/>([^(]+)\(/);
+            var location = locationMatch ? locationMatch[1].trim() : '';
+            
+            // Extract date and photographer
+            var dateMatch = dataTitle.match(/\)\s*(\d{4}\/\d{2}\/\d{2})\s*©\s*([^"]+)/);
+            var date = dateMatch ? dateMatch[1] : '';
+            var photographer = dateMatch ? dateMatch[2].trim() : '';
+            
+            // Get image source
             var img = link.querySelector('img');
+            var imageSrc = img ? img.src : '';
+            
             observations.push({
-                lat: parseFloat(latMatch[1]),
-                lng: parseFloat(lngMatch[1]),
-                name: link.textContent.trim() || 'Unknown Butterfly',
-                image: img ? img.src : '',
+                lat: lat,
+                lng: lng,
+                scientificName: scientificName,
+                commonName: commonName,
+                location: location,
+                date: date,
+                photographer: photographer,
+                image: imageSrc,
                 source: sourceUrl
             });
         }
     });
-    
-    // Method 3: Look for table cells with coordinates
-    var tableCells = doc.querySelectorAll('td[data-lat], td[data-lng]');
-    if (tableCells.length > 0) {
-        // Group by rows
-        var rows = {};
-        tableCells.forEach(function(cell) {
-            var row = cell.parentElement;
-            var rowId = Array.from(row.parentElement.children).indexOf(row);
-            
-            if (!rows[rowId]) rows[rowId] = {};
-            
-            if (cell.hasAttribute('data-lat')) {
-                rows[rowId].lat = parseFloat(cell.getAttribute('data-lat'));
-            }
-            if (cell.hasAttribute('data-lng')) {
-                rows[rowId].lng = parseFloat(cell.getAttribute('data-lng'));
-            }
-            
-            var img = cell.querySelector('img');
-            if (img) {
-                rows[rowId].image = img.src;
-                rows[rowId].name = img.alt || cell.textContent.trim();
-            }
-        });
-        
-        Object.values(rows).forEach(function(row) {
-            if (row.lat && row.lng) {
-                observations.push({
-                    lat: row.lat,
-                    lng: row.lng,
-                    name: row.name || 'Unknown Butterfly',
-                    image: row.image || '',
-                    source: sourceUrl
-                });
-            }
-        });
-    }
     
     return observations;
 }
@@ -184,18 +161,31 @@ function parseObservationsFromPage(doc, sourceUrl) {
 function addHomeMarker(observation) {
     var marker = L.marker([observation.lat, observation.lng]);
     
-    var popupContent = '<div style="text-align: center; max-width: 300px;">';
-    popupContent += '<strong>' + observation.name + '</strong><br/>';
+    var popupContent = '<div style="text-align: center; max-width: 320px;">';
     
     if (observation.image) {
-        popupContent += '<img src="' + observation.image + '" alt="' + observation.name + '" style="max-width: 280px; margin: 10px 0; border-radius: 8px;"><br/>';
+        popupContent += '<img src="' + observation.image + '" alt="' + observation.commonName + '" style="max-width: 300px; margin-bottom: 10px; border-radius: 8px;"><br/>';
     }
     
-    popupContent += '<small>Lat: ' + observation.lat.toFixed(4) + ', Lng: ' + observation.lng.toFixed(4) + '</small><br/>';
-    popupContent += '<small style="color: #666;">Source: ' + observation.source.split('/').pop().replace('.html', '') + '</small>';
+    popupContent += '<strong style="font-size: 16px;">' + observation.commonName + '</strong><br/>';
+    popupContent += '<em style="color: #666; font-size: 13px;">' + observation.scientificName + '</em><br/><br/>';
+    
+    if (observation.location) {
+        popupContent += '<div style="font-size: 12px; text-align: left; margin: 10px 0;">';
+        popupContent += '📍 ' + observation.location + '<br/>';
+        popupContent += '📅 ' + observation.date + '<br/>';
+        popupContent += '📷 ' + observation.photographer + '<br/>';
+        popupContent += '<small style="color: #999;">Lat: ' + observation.lat.toFixed(4) + ', Lng: ' + observation.lng.toFixed(4) + '</small>';
+        popupContent += '</div>';
+    }
+    
     popupContent += '</div>';
     
-    marker.bindPopup(popupContent);
+    marker.bindPopup(popupContent, {
+        maxWidth: 350,
+        className: 'butterfly-popup'
+    });
+    
     homeMarkers.addLayer(marker);
 }
 
