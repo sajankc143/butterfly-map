@@ -541,45 +541,81 @@ async function loadHomeObservations() {
     observations = [];
     clearMap();
 
-   // REPLACE YOUR fetchWithFallbacks FUNCTION WITH THIS SIMPLE VERSION:
-// Since you're loading from the SAME DOMAIN, no proxy needed!
-
-async function fetchWithFallbacks(url) {
-    console.log(`Fetching: ${url}`);
-    
-    try {
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml',
-            },
-            cache: 'no-cache'
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-        }
-        
-        const content = await response.text();
-        
-        if (!content || content.length < 1000) {
-            throw new Error('Content too short or empty');
-        }
-        
-        console.log(`✅ Successfully loaded ${url}`);
-        console.log(`Content length: ${content.length} characters`);
-        
-        return content;
-        
-    } catch (error) {
-        console.error(`❌ Failed to load ${url}:`, error);
-        throw error;
+    const proxyServices = [
+    {
+        url: 'https://api.allorigins.win/raw?url=',
+        type: 'text'
+    },
+    {
+        url: 'https://corsproxy.io/?',
+        type: 'text'
+    },
+    {
+        url: 'https://api.codetabs.com/v1/proxy?quest=',
+        type: 'text'
     }
-}
+];
 
-// ALSO REMOVE OR COMMENT OUT THIS LINE IN loadHomeObservations():
-// const proxyServices = [...]; 
-// You don't need it anymore!
+    let totalLoaded = 0;
+    const errors = [];
+    const maxRetries = 2;
+
+    async function fetchWithFallbacks(url) {
+        for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
+            const proxy = proxyServices[proxyIndex];
+            
+            for (let retry = 0; retry < maxRetries; retry++) {
+                try {
+                    const proxyUrl = proxy.url + encodeURIComponent(url);
+                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 20000);
+                    
+                    const response = await fetch(proxyUrl, {
+                        signal: controller.signal,
+                        headers: {
+                            'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
+                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+                        }
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        let content;
+                        
+                        if (proxy.type === 'json') {
+                            const data = await response.json();
+                            content = data.contents || data.body;
+                        } else {
+                            content = await response.text();
+                        }
+                        
+                        if (content && content.length > 1000) {
+                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
+                            return content;
+                        } else {
+                            throw new Error('Content too short or empty');
+                        }
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                } catch (error) {
+                    console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
+                    
+                    if (retry < maxRetries - 1) {
+                        const delay = 1000 + (retry * 1000);
+                        console.log(`Waiting ${delay}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                    }
+                }
+            }
+        }
+        
+        throw new Error('All proxies and retries failed');
+    }
 
     for (let i = 0; i < sourceUrls.length; i++) {
         const url = sourceUrls[i];
