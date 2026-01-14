@@ -520,7 +520,7 @@ async function loadHomeObservations() {
     }
     
     isLoading = true;
-    console.log('=== ROBUST LOAD OBSERVATIONS STARTED ===');
+    console.log('=== LOADING HOME OBSERVATIONS (NO PROXY) ===');
     
     const loadingDiv = document.getElementById('loading');
     if (loadingDiv) {
@@ -531,98 +531,36 @@ async function loadHomeObservations() {
     observations = [];
     clearMap();
 
-    const proxyServices = [
-        {
-            url: 'https://corsproxy.io/?',
-            type: 'text'
-        },
-        {
-            url: 'https://api.allorigins.win/get?url=',
-            type: 'json'
-        },
-        {
-            url: 'https://api.codetabs.com/v1/proxy?quest=',
-            type: 'text'
-        },
-        {
-            url: 'https://thingproxy.freeboard.io/fetch/',
-            type: 'text'
-        }
-    ];
-
     let totalLoaded = 0;
     const errors = [];
-    const maxRetries = 2;
-
-    async function fetchWithFallbacks(url) {
-        for (let proxyIndex = 0; proxyIndex < proxyServices.length; proxyIndex++) {
-            const proxy = proxyServices[proxyIndex];
-            
-            for (let retry = 0; retry < maxRetries; retry++) {
-                try {
-                    const proxyUrl = proxy.url + encodeURIComponent(url);
-                    console.log(`Trying proxy ${proxyIndex + 1}, attempt ${retry + 1}:`, proxy.url);
-                    
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 20000);
-                    
-                    const response = await fetch(proxyUrl, {
-                        signal: controller.signal,
-                        headers: {
-                            'User-Agent': 'Mozilla/5.0 (compatible; ButterflyBot/1.0)',
-                            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-                        }
-                    });
-                    
-                    clearTimeout(timeoutId);
-                    
-                    if (response.ok) {
-                        let content;
-                        
-                        if (proxy.type === 'json') {
-                            const data = await response.json();
-                            content = data.contents || data.body;
-                        } else {
-                            content = await response.text();
-                        }
-                        
-                        if (content && content.length > 1000) {
-                            console.log(`✅ Success with proxy ${proxyIndex + 1} on attempt ${retry + 1}`);
-                            return content;
-                        } else {
-                            throw new Error('Content too short or empty');
-                        }
-                    } else {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    
-                } catch (error) {
-                    console.log(`❌ Proxy ${proxyIndex + 1}, attempt ${retry + 1} failed:`, error.message);
-                    
-                    if (retry < maxRetries - 1) {
-                        const delay = 1000 + (retry * 1000);
-                        console.log(`Waiting ${delay}ms before retry...`);
-                        await new Promise(resolve => setTimeout(resolve, delay));
-                    }
-                }
-            }
-        }
-        
-        throw new Error('All proxies and retries failed');
-    }
 
     for (let i = 0; i < sourceUrls.length; i++) {
         const url = sourceUrls[i];
         const pageName = getPageName(url);
         
-        console.log(`\n--- Processing ${i + 1}/${sourceUrls.length}: ${pageName} ---`);
+        console.log(`\n--- Loading ${i + 1}/${sourceUrls.length}: ${pageName} ---`);
         
         if (loadingDiv) {
             loadingDiv.textContent = `Loading ${pageName}... (${i + 1}/${sourceUrls.length})`;
         }
         
         try {
-            const htmlContent = await fetchWithFallbacks(url);
+            // Direct fetch - no proxy needed for same domain!
+            const response = await fetch(url, {
+                cache: 'no-cache',
+                signal: AbortSignal.timeout(15000)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const htmlContent = await response.text();
+            
+            if (!htmlContent || htmlContent.length < 1000) {
+                throw new Error('Content too short');
+            }
+            
             const siteObservations = extractObservations(htmlContent, url);
             
             observations.push(...siteObservations);
@@ -631,7 +569,7 @@ async function loadHomeObservations() {
             console.log(`✅ ${pageName}: ${siteObservations.length} observations (Total: ${totalLoaded})`);
             
             if (loadingDiv) {
-                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} observations found so far...`;
+                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} observations found...`;
             }
             
         } catch (error) {
@@ -639,12 +577,13 @@ async function loadHomeObservations() {
             errors.push(`${pageName}: ${error.message}`);
             
             if (loadingDiv) {
-                loadingDiv.textContent = `Failed to load ${pageName}, continuing with others...`;
+                loadingDiv.textContent = `Failed ${pageName}, continuing...`;
             }
         }
 
+        // Small delay between requests
         if (i < sourceUrls.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
     }
 
@@ -658,34 +597,6 @@ async function loadHomeObservations() {
 
     if (errors.length > 0) {
         console.log('Errors:', errors);
-        
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = `
-            background: #fff3cd; 
-            border: 1px solid #ffeaa7; 
-            color: #856404; 
-            padding: 10px; 
-            margin: 10px 0; 
-            border-radius: 4px;
-            position: relative;
-        `;
-        errorDiv.innerHTML = `
-            <strong>Some pages couldn't be loaded:</strong><br>
-            ${errors.join('<br>')}
-            <br><small>Showing ${totalLoaded} observations from ${sourceUrls.length - errors.length} successful pages.</small>
-            <button onclick="this.parentElement.remove()" style="position: absolute; top: 5px; right: 10px; background: none; border: none; font-size: 16px; cursor: pointer;">×</button>
-        `;
-        
-        const container = document.querySelector('.container');
-        if (container) {
-            container.insertBefore(errorDiv, document.getElementById('homeMap'));
-        }
-        
-        setTimeout(() => {
-            if (errorDiv.parentElement) {
-                errorDiv.remove();
-            }
-        }, 15000);
     }
 
     displayObservations();
@@ -694,13 +605,13 @@ async function loadHomeObservations() {
     if (totalLoaded > 0) {
         console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} observations!`);
     } else {
-        console.log('⚠️ No observations loaded - all sources may be down');
+        console.log('⚠️ No observations loaded');
         
         if (loadingDiv) {
             loadingDiv.style.display = 'block';
             loadingDiv.innerHTML = `
                 <div style="color: #856404;">
-                    No observations could be loaded from any source. 
+                    No observations could be loaded. 
                     <button onclick="loadHomeObservations()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
                         Try Again
                     </button>
@@ -721,8 +632,6 @@ async function loadHomeObservations() {
             console.log('Initial sync with existing search filters');
             syncMapWithSearchResults(infiniteGalleryUpdater.filteredImages);
         }
-    } else {
-        console.log(`URL contains observation ID ${obsId}, skipping initial sync - waiting for gallery to show single observation`);
     }
 }
 
