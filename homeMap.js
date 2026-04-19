@@ -524,125 +524,42 @@ function extractObservations(htmlContent, sourceUrl) {
 }
 
 async function loadHomeObservations() {
-    if (isLoading) {
-        console.log('Already loading, skipping duplicate request');
-        return;
-    }
-    
+    if (isLoading) return;
     isLoading = true;
-    console.log('=== LOADING HOME OBSERVATIONS (NO PROXY) ===');
     
     const loadingDiv = document.getElementById('loading');
     if (loadingDiv) {
         loadingDiv.style.display = 'block';
-        loadingDiv.textContent = 'Starting to load butterfly observations...';
+        loadingDiv.textContent = 'Loading observations...';
     }
     
-    observations = [];
-    clearMap();
-
-    let totalLoaded = 0;
-    const errors = [];
-
-    for (let i = 0; i < sourceUrls.length; i++) {
-        const url = sourceUrls[i];
-        const pageName = getPageName(url);
+    try {
+        const response = await fetch('https://sajankc143.github.io/observationmap/observations.json');
+        const data = await response.json();
+        const images = data.observations || data;
         
-        console.log(`\n--- Loading ${i + 1}/${sourceUrls.length}: ${pageName} ---`);
+        observations = images
+            .filter(img => img.lat && img.lon)
+            .map(img => ({
+                species: img.species,
+                commonName: img.commonName,
+                coordinates: [parseFloat(img.lat), parseFloat(img.lon)],
+                location: img.location || '',
+                date: img.date || '',
+                imageUrl: img.thumbnailUrl,
+                fullImageUrl: img.fullImageUrl,
+                sourceUrl: img.fullImageUrl,
+                isObscured: img.isObscured || false
+            }));
         
-        if (loadingDiv) {
-            loadingDiv.textContent = `Loading ${pageName}... (${i + 1}/${sourceUrls.length})`;
-        }
-        
-        try {
-            // Direct fetch - no proxy needed for same domain!
-            const response = await fetch(url, {
-                cache: 'no-cache',
-                signal: AbortSignal.timeout(15000)
-            });
-            
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            
-            const htmlContent = await response.text();
-            
-            if (!htmlContent || htmlContent.length < 1000) {
-                throw new Error('Content too short');
-            }
-            
-            const siteObservations = extractObservations(htmlContent, url);
-            
-            observations.push(...siteObservations);
-            totalLoaded += siteObservations.length;
-            
-            console.log(`✅ ${pageName}: ${siteObservations.length} observations (Total: ${totalLoaded})`);
-            
-            if (loadingDiv) {
-                loadingDiv.textContent = `Loaded ${pageName} - ${totalLoaded} observations found...`;
-            }
-            
-        } catch (error) {
-            console.error(`❌ Failed to load ${pageName}:`, error.message);
-            errors.push(`${pageName}: ${error.message}`);
-            
-            if (loadingDiv) {
-                loadingDiv.textContent = `Failed ${pageName}, continuing...`;
-            }
-        }
-
-        // Small delay between requests
-        if (i < sourceUrls.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
+        console.log(`Loaded ${observations.length} observations from JSON`);
+    } catch (error) {
+        console.error('Failed to load observations:', error);
     }
-
-    if (loadingDiv) {
-        loadingDiv.style.display = 'none';
-    }
-
-    console.log(`\n=== LOADING COMPLETE ===`);
-    console.log(`Successfully loaded: ${totalLoaded} observations`);
-    console.log(`Failed pages: ${errors.length}`);
-
-    if (errors.length > 0) {
-        console.log('Errors:', errors);
-    }
-
-    displayObservations();
+    
+    if (loadingDiv) loadingDiv.style.display = 'none';
     isLoading = false;
-    
-    if (totalLoaded > 0) {
-        console.log(`✅ Successfully loaded butterfly map with ${totalLoaded} observations!`);
-    } else {
-        console.log('⚠️ No observations loaded');
-        
-        if (loadingDiv) {
-            loadingDiv.style.display = 'block';
-            loadingDiv.innerHTML = `
-                <div style="color: #856404;">
-                    No observations could be loaded. 
-                    <button onclick="loadHomeObservations()" style="margin-left: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                        Try Again
-                    </button>
-                </div>
-            `;
-        }
-    }
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const obsId = urlParams.get('obs');
-    
-    if (!obsId) {
-        if (typeof infiniteGalleryUpdater !== 'undefined' && 
-            infiniteGalleryUpdater.filteredImages && 
-            infiniteGalleryUpdater.currentSearchParams &&
-            !isViewingSingleObservation) {
-            
-            console.log('Initial sync with existing search filters');
-            syncMapWithSearchResults(infiniteGalleryUpdater.filteredImages);
-        }
-    }
+    displayObservations();
 }
 function displayObservations() {
     const urlParams = new URLSearchParams(window.location.search);
