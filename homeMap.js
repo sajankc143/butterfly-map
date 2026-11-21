@@ -534,9 +534,10 @@ async function loadHomeObservations() {
     }
     
     try {
-        const response = await fetch('https://sajankc143.github.io/observationmap/observations.json');
-        const data = await response.json();
-        const images = data.observations || data;
+              const images = (typeof getButterflyObservations === 'function')
+            ? await getButterflyObservations()
+            : await fetch('https://sajankc143.github.io/observationmap/observations.json')
+                .then(r => r.json()).then(d => d.observations || d);
         
         observations = images
             .filter(img => img.lat && img.lon)
